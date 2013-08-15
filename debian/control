@@ -1,0 +1,17 @@
+Source: rum
+Section: web
+Priority: extra
+Maintainer: Tomas Corej <tomas.corej@websupport.sk>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.2
+Homepage: http://oss.websupport.sk/rum/
+#Vcs-Git: git://git.debian.org/collab-maint/rum.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/rum.git;a=summary
+
+Package: rum
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, libcdb1
+Description: One process tcp redirector with socket file support and more listen ports/socket files, using libevent
+  rum is one process tcp redirector with socket file support and more listen ports/socket files, using libevent
+  It's also mysql reverse proxy for more mysql servers (the key to select destination server is username send by client) using
+  cdb database.
