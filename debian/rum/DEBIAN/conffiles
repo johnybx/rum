@@ -1,0 +1,3 @@
+/etc/default/rum
+/etc/cron.d/rum
+/etc/init.d/rum
