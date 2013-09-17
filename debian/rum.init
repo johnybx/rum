@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 ### BEGIN INIT INFO
 # Provides:          rum
 # Required-Start:    $network $local_fs
@@ -13,6 +13,7 @@
 ### END INIT INFO
 
 # Author: Tomas Corej <tomas.corej@websupport.sk>
+# Author: Matus Bursa <matus.bursa@eset.sk>
 
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
@@ -51,18 +52,17 @@ do_start()
 		PIDFILE=/var/run/${instance%%:*}.pid
 		DAEMON_ARGS=${instance#*:}
 			start-stop-daemon --start -m --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
-				|| return 1
+				||  log_warning_msg "daemon was already running"
 			start-stop-daemon --start -m --quiet --pidfile $PIDFILE --exec $DAEMON -- \
 				$DAEMON_ARGS \
-				|| return 2
+				|| log_failure_msg "daemon could not be started"
 		# Add code here, if necessary, that waits for the process to be ready
 		# to handle requests from services started subsequently which depend
 		# on this one.  As a last resort, sleep for some time.
 
 		# rum forks itself to background so pid is always about one off
 		PID=`cat $PIDFILE`
-		PID=$((PID+1))
-		echo $PID > $PIDFILE
+		echo $((PID+1)) > $PIDFILE
 	done
 }
 
@@ -92,6 +92,7 @@ do_stop()
 		# Many daemons don't delete their pidfiles when they exit.
 		[ -f $PIDFILE ] && rm -f $PIDFILE
 	done
+	rm -f /var/run/rum*.pid
 	unset IFS
 	return 0
 }
@@ -105,7 +106,74 @@ do_reload() {
 	# restarting (for example, when it is sent a SIGHUP),
 	# then implement that here.
 	#
+	grep -v ^# /etc/default/$NAME | \
+        while read instance
+	do
+		PIDFILE=/var/run/${instance%%:*}.pid
+		PROCESS=$(cat $PIDFILE 2> /dev/null)
+		PROCESS_NAME=$(ps -p $PROCESS -o comm= 2> /dev/null)	
+
+		PROCESS_ARGS=$(ps -p $PROCESS -o args= 2> /dev/null)
+		DAEMON_ARGS=${instance#*:}
+	
+		if [ "rum" != "$PROCESS_NAME" ]; then
+			log_daemon_msg "Reloading $DESC" "${instance%%:*}"
+			# TCP only for now
+			if [[ $DAEMON_ARGS =~ ^.*\-\s\ +tcp:([0-9]{1,3}.){3}[0-9]{1,3}:([0-9]+)\ .+$ ]]; then
+				PORT=${BASH_REMATCH[2]}
+				PID=`lsof -i4:$PORT -t`
+				if [[ $PID =~ ^([0-9]+)$ ]]; then
+					PID=${BASH_REMATCH[1]}
+					kill $PID
+					sleep 3
+				fi	
+			unset PORT
+			unset PID
+			fi
+			# start not running process
+			start-stop-daemon --start -m --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
+			PID=`cat $PIDFILE`
+		        echo $((PID+1)) > $PIDFILE
+			continue
+		elif [ "$DAEMON $DAEMON_ARGS" != "$PROCESS_ARGS" ]; then
+			log_daemon_msg "Reloading $DESC" "${instance%%:*}"
+				# stop running process with bad arguments
+			start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE --name $NAME
+			start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --retry=0/30/KILL/5 --exec $DAEMON
+			[ -f $PIDFILE ] && rm -f $PIDFILE
+			
+			# start process
+			start-stop-daemon --start -m --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
+                        PID=`cat $PIDFILE`
+                        echo $((PID+1)) > $PIDFILE
+		fi
+	done
 	return 0
+}
+
+do_status() {
+	grep -v ^# /etc/default/$NAME | \
+	( retn=0 ;
+        while read instance
+        do
+		PIDFILE=/var/run/${instance%%:*}.pid
+                PROCESS=$(cat $PIDFILE 2> /dev/null)
+                PROCESS_NAME=$(ps -p $PROCESS -o comm= 2> /dev/null)
+
+                PROCESS_ARGS=$(ps -p $PROCESS -o args= 2> /dev/null)
+                DAEMON_ARGS=${instance#*:}
+
+		if [ "rum" != "$PROCESS_NAME" ]; then
+			echo ${instance%%:*} is not running
+			retn=1
+		elif [ "$DAEMON $DAEMON_ARGS" != "$PROCESS_ARGS" ]; then
+			echo ${instance%%:*} is running with bad arguments
+			retn=2
+		else
+			echo ${instance%%:*} is running
+		fi
+	done
+	return $retn )
 }
 
 case "$1" in
@@ -126,17 +194,19 @@ case "$1" in
 	esac
 	;;
   status)
-       status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
+#       status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
+	do_status
+	exit $?
        ;;
-  #reload|force-reload)
+  reload|force-reload)
 	#
 	# If do_reload() is not implemented then leave this commented out
 	# and leave 'force-reload' as an alias for 'restart'.
 	#
 	#log_daemon_msg "Reloading $DESC" "$NAME"
-	#do_reload
+	do_reload
 	#log_end_msg $?
-	#;;
+	;;
   restart|force-reload)
 	#
 	# If the "reload" option is implemented then remove the
@@ -161,7 +231,7 @@ case "$1" in
 	;;
   *)
 	#echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
-	echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}" >&2
+	echo "Usage: $SCRIPTNAME {start|stop|status|reload|restart|force-reload}" >&2
 	exit 3
 	;;
 esac
