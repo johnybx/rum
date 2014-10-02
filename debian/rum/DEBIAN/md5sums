@@ -1,6 +1,6 @@
 e5fe9f7dc3fe0327dc00218e0b344ed2  root/bin/export_mariadb55_cdb.pl
-ebcbf141de9b37259ea7dd30f51ec2d4  usr/sbin/rum
+e23263b85143061af6cc2ca46494b05b  usr/sbin/rum
 02ddd6a6b8020883d841dc8bcb5b3919  usr/share/doc/rum/README
 1ffa525e52f3490368a384ce413cb39b  usr/share/doc/rum/README.Debian
-e374e623fbf548b3d3d5e1487e3125ed  usr/share/doc/rum/changelog.gz
+e28f01e24766848b4fe5cda655629402  usr/share/doc/rum/changelog.Debian.gz
 af4d20e935c90ef4d9277290c192c70c  usr/share/doc/rum/copyright

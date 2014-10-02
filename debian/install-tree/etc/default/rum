@@ -1,10 +1,1 @@
 #instancename:rum parameters
-rummysql40:-s tcp:0.0.0.0:3306 -s sock:/tmp/mysql.sock -d tcp:10.20.0.180:3306 -m tcp:localhost:666 -b
-rummysql41:-s tcp:0.0.0.0:3307 -s sock:/tmp/mysql41.sock -d tcp:10.10.29.30:3307 -m tcp:localhost:667 -b
-rummaria55:-s tcp:0.0.0.0:3310 -s sock:/tmp/mariadb55.sock -d tcp:mariadb55-1:3306 -m tcp:localhost:671 -M /etc/conf/mysql55.cdb -b
-rumwebadmin:-s sock:/tmp/mysql-admin.sock -d tcp:10.10.29.66:3333 -b
-rumpop3:-s tcp:0.0.0.0:110 -d tcp:10.10.29.63:110 -b -m tcp:localhost:800
-rumpop3s:-s tcp:0.0.0.0:995 -d tcp:10.10.29.63:995 -b -m tcp:localhost:801
-rumimap:-s tcp:0.0.0.0:143 -d tcp:10.10.29.63:143 -b -m tcp:localhost:802
-rumimaps:-s tcp:0.0.0.0:993 -d tcp:10.10.29.63:993 -b -m tcp:localhost:804
-rummemcache:-s tcp:127.0.0.1:11211 -d tcp:10.10.29.69:11211 -b -m tcp:localhost:804

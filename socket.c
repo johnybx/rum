@@ -199,6 +199,8 @@ void accept_connect(int sock, short event, void *arg) {
 			bufferevent_free(bev_target);
 			free(bev_arg_client);
 			free(bev_arg_target);
+
+			return;
 		}
 		bev_arg_target->connecting=0;
 		struct linger l;
@@ -266,6 +268,7 @@ void cache_init_packet_from_server() {
 	if (bufferevent_socket_connect(bev, s, len)==-1) {
 		bufferevent_free(bev);
 		free(bev_arg);
+		return;
 	}
 
 	struct linger l;

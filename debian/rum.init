@@ -51,9 +51,9 @@ do_start()
 	do
 		PIDFILE=/var/run/${instance%%:*}.pid
 		DAEMON_ARGS=${instance#*:}
-			start-stop-daemon --start -m --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
+			start-stop-daemon --start -m --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 				||  log_warning_msg "daemon was already running"
-			start-stop-daemon --start -m --quiet --pidfile $PIDFILE --exec $DAEMON -- \
+			start-stop-daemon --start -m --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- \
 				$DAEMON_ARGS \
 				|| log_failure_msg "daemon could not be started"
 		# Add code here, if necessary, that waits for the process to be ready
@@ -117,21 +117,22 @@ do_reload() {
 		DAEMON_ARGS=${instance#*:}
 	
 		if [ "rum" != "$PROCESS_NAME" ]; then
+			# kill whatever it is and run our rum instance
 			log_daemon_msg "Reloading $DESC" "${instance%%:*}"
 			# TCP only for now
-			if [[ $DAEMON_ARGS =~ ^.*\-\s\ +tcp:([0-9]{1,3}.){3}[0-9]{1,3}:([0-9]+)\ .+$ ]]; then
-				PORT=${BASH_REMATCH[2]}
-				PID=`lsof -i4:$PORT -t`
+			if [[ $DAEMON_ARGS =~ ^.*\-\s\ +tcp:(([0-9]{1,3}.){3}[0-9]{1,3}:[0-9]+)\ .+$ ]]; then
+				IPPORT=${BASH_REMATCH[1]}
+				PID=`lsof -i4@$IPPORT -sTCP:LISTEN -t`
 				if [[ $PID =~ ^([0-9]+)$ ]]; then
 					PID=${BASH_REMATCH[1]}
 					kill $PID
 					sleep 3
 				fi	
-			unset PORT
+			unset IPPORT
 			unset PID
 			fi
 			# start not running process
-			start-stop-daemon --start -m --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
+			start-stop-daemon --start -m --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
 			PID=`cat $PIDFILE`
 		        echo $((PID+1)) > $PIDFILE
 			continue
@@ -143,7 +144,7 @@ do_reload() {
 			[ -f $PIDFILE ] && rm -f $PIDFILE
 			
 			# start process
-			start-stop-daemon --start -m --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
+			start-stop-daemon --start -m --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
                         PID=`cat $PIDFILE`
                         echo $((PID+1)) > $PIDFILE
 		fi
@@ -164,13 +165,19 @@ do_status() {
                 DAEMON_ARGS=${instance#*:}
 
 		if [ "rum" != "$PROCESS_NAME" ]; then
-			echo ${instance%%:*} is not running
+			if [ "$SILENT" != "yes" ]; then 
+				echo ${instance%%:*} is not running
+			fi
 			retn=1
 		elif [ "$DAEMON $DAEMON_ARGS" != "$PROCESS_ARGS" ]; then
-			echo ${instance%%:*} is running with bad arguments
+			if [ "$SILENT" != "yes" ]; then 
+				echo ${instance%%:*} is running with bad arguments
+			fi
 			retn=2
 		else
-			echo ${instance%%:*} is running
+			if [ "$SILENT" != "yes" ]; then 
+				echo ${instance%%:*} is running
+			fi
 		fi
 	done
 	return $retn )
@@ -194,7 +201,11 @@ case "$1" in
 	esac
 	;;
   status)
-#       status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
+	do_status
+	exit $?
+       ;;
+  silentstatus)
+	SILENT="yes"
 	do_status
 	exit $?
        ;;
@@ -231,7 +242,7 @@ case "$1" in
 	;;
   *)
 	#echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
-	echo "Usage: $SCRIPTNAME {start|stop|status|reload|restart|force-reload}" >&2
+	echo "Usage: $SCRIPTNAME {start|stop|silentstatus|status|reload|restart|force-reload}" >&2
 	exit 3
 	;;
 esac

@@ -5,6 +5,11 @@ if [ -x "/etc/init.d/rum" ]; then
 	if [ ! -e "/etc/init/rum.conf" ]; then
 		update-rc.d rum defaults >/dev/null
 	fi
-	invoke-rc.d rum start || exit $?
+	if [ -n "$2" ]; then
+		_dh_action=restart
+	else
+		_dh_action=start
+	fi
+	invoke-rc.d rum $_dh_action || exit $?
 fi
 # End automatically added section

@@ -14,7 +14,14 @@ int main (int ac, char *av[]) {
 	struct destination *destination;
 	struct listener *listener;
 
+	struct rlimit fdlimit;
+	fdlimit.rlim_cur=65535;
+	fdlimit.rlim_max=65535;
+
+	setrlimit(RLIMIT_NOFILE, &fdlimit);
+
 	signal(SIGPIPE ,SIG_IGN);
+
 
 	if (ac==1) {
 		usage();

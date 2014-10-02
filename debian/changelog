@@ -1,3 +1,60 @@
+rum (2.9-10) precise; urgency=low
+
+  * setrlimit fd to 65535
+  * fix segfault when over fd limit
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Thu, 02 Oct 2014 17:02:29 +0200
+
+rum (2.9-9) precise; urgency=low
+
+  * update libevent to 2.0.21
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Thu, 02 Oct 2014 14:01:32 +0200
+
+rum (2.9-8) precise; urgency=low
+
+  * restart after upgrade fix2
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Mon, 22 Sep 2014 16:30:05 +0200
+
+rum (2.9-7) precise; urgency=low
+
+  * after upgrade restart rum via service, not invoke-rc.d
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Mon, 22 Sep 2014 16:16:10 +0200
+
+rum (2.9-6) precise; urgency=low
+
+  * fix init script
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Mon, 22 Sep 2014 16:13:50 +0200
+
+rum (2.9-5) precise; urgency=low
+
+  * set nice -20 on start
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Mon, 22 Sep 2014 16:09:30 +0200
+
+rum (2.9-4) unstable; urgency=low
+
+  * Improved reload support with regexp that handles also bind addr
+  * Fixed minor bug with lsof parameter
+  * Fixed cron.d
+
+ -- Tomas Corej <tomas.corej@websupport.sk>  Mon, 17 Mar 2014 15:21:58 +0100
+
+rum (2.9-3) unstable; urgency=low
+
+  * Silent status check for using in scripts
+
+ -- Tomas Corej <tomas.corej@websupport.sk>  Thu, 8 Dec 2013 22:12:23 +0200
+
+rum (2.9-2) unstable; urgency=low
+
+  * Improved init script that handles multiple instances
+
+ -- Tomas Corej <tomas.corej@websupport.sk>  Thu, 15 Aug 2013 14:12:23 +0200
+
 rum (2.9) unstable; urgency=low
 
   * Initial Release.

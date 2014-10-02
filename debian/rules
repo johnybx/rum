@@ -11,7 +11,7 @@
 # build-arch and build-indep targets  by Bill Allombert 2001
 
 # Uncomment this to turn on verbose mode.
-#export DH_VERBOSE=1
+export DH_VERBOSE=1
 
 # This has to be exported to make some magic below work.
 export DH_OPTIONS
@@ -47,3 +47,8 @@ override_dh_install-arch:
 	cd debian && test -L tmp || ln -s $(INSTALL_DIR_RELATIVE) tmp
 	dh_install -a --list-missing
 
+override_dh_installinit:
+	dh_installinit -R
+
+override_dh_strip:
+	echo kokocina
