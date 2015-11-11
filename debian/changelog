@@ -1,3 +1,15 @@
+rum (2.9-11-ws1) precise; urgency=low
+
+  * Removed /root/bin/export_mariadb55_cdb.pl and its cron entry
+
+ -- Tomas Corej <tomas.corej@websupport.sk>  Thu, 29 Jan 2015 10:22:50 +0100
+
+rum (2.9-11) precise; urgency=low
+
+  * use tcp_nodelay on sockets
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Tue, 14 Oct 2014 13:13:43 +0200
+
 rum (2.9-10) precise; urgency=low
 
   * setrlimit fd to 65535

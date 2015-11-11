@@ -40,7 +40,6 @@ build:
 	dh_auto_build -D "$(BUILD_DIR)" -- -j`nproc`
 	dh_auto_install -D "$(BUILD_DIR)" -- -j1 
 	install -m 700 $(BUILD_DIR)/rum -D $(INSTALL_DIR)/usr/sbin/rum
-	install -m 700 $(BUILD_DIR)/contrib/export_mariadb55_cdb.pl -D $(INSTALL_DIR)/root/bin/export_mariadb55_cdb.pl
 	install -m 644 $(BUILD_DIR)/contrib/rum.defaults -D $(INSTALL_DIR)/etc/default/rum
 
 override_dh_install-arch:

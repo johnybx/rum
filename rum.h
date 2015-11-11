@@ -3,6 +3,7 @@
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
