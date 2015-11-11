@@ -207,6 +207,16 @@ void accept_connect(int sock, short event, void *arg) {
 		l.l_linger=0;
 
 		setsockopt(bufferevent_getfd(bev_target), SOL_SOCKET, SO_LINGER, (void *) &l, sizeof (l));
+
+        /* connect timeout timer */
+        struct timeval time;
+        time.tv_sec = CONNECT_TIMEOUT;
+        time.tv_usec = 0;
+
+        bev_arg_target->connect_timer=event_new(event_base, -1, 0, connect_timeout_cb, bev_arg_target);
+        event_add(bev_arg_target->connect_timer, &time);
+
+        bev_arg_target->destination=destination;
 	} else {
 		/* use cached init packet */
 		bev_arg_client->remote=NULL;

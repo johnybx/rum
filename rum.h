@@ -32,6 +32,8 @@
 #define INPUT_BUFFER_LIMIT 65535
 #define OUTPUT_BUFFER_LIMIT 65535
 
+#define CONNECT_TIMEOUT 3
+
 /* cdb file is reopened every 2 seconds */
 #define CDB_RELOAD_TIME 2
 
@@ -68,8 +70,6 @@ struct destination {
 
 	/* if we use -M we can have linked list of destinations */
 	struct destination *next;
-    int fail;
-    time_t failtime;
 };
 
 /* every connection has 2 bev_arg, one for client socket and one for destination socket,
@@ -92,6 +92,7 @@ struct bev_arg {
 
 	/* used as workaround for bug in bufferevent_socket_connect() */
 	char connecting;
+    struct event *connect_timer;
 };
 
 struct mysql_mitm {
@@ -131,6 +132,7 @@ void parse_arg(char *arg, char *type, struct sockaddr_in *sin, struct sockaddr_u
 void read_callback(struct bufferevent *bev, void *ptr);
 void write_callback(struct bufferevent *bev, void *ptr);
 void event_callback(struct bufferevent *bev, short callbacks, void *ptr);
+void connect_timeout_cb(evutil_socket_t fd, short what, void *arg);
 
 /* mysql_callback.c */
 void mysql_read_callback(struct bufferevent *bev, void *ptr);
@@ -138,6 +140,7 @@ void mysql_write_callback(struct bufferevent *bev, void *ptr);
 void mysql_event_callback(struct bufferevent *bev, short callbacks, void *ptr);
 void cache_mysql_init_packet_read_callback(struct bufferevent *bev, void *ptr);
 void cache_mysql_init_packet_event_callback(struct bufferevent *bev, short events, void *ptr);
+void mysql_connect_timeout_cb(evutil_socket_t fd, short what, void *arg);
 
 
 /* mysql_mitm .c */
