@@ -222,17 +222,22 @@ int handle_auth_packet_from_client(struct bev_arg *bev_arg, struct bufferevent *
 	}
 
 	if (mysql_server!=NULL) {
-		for (dst=first_destination ; dst->next ; dst=dst->next) {
-			if (!strcmp(dst->s, mysql_server)) {
-				destination=dst;
-				break;
-			}
-		}
+        if (first_destination) {
+    		for (dst=first_destination ; dst->next ; dst=dst->next) {
+    			if (!strcmp(dst->s, mysql_server)) {
+    				destination=dst;
+    				break;
+    			}
+    		}
 
-		if (!destination) {
-			dst->next = destination = malloc(sizeof(struct destination));
-			prepareclient(mysql_server, destination);
-		}
+    		if (!destination) {
+    			dst->next = destination = malloc(sizeof(struct destination));
+    			prepareclient(mysql_server, destination);
+    		}
+        } else {
+            dst = destination = malloc(sizeof(struct destination));
+    		prepareclient(mysql_server, destination);
+        }
 	} else {
 			/* if user is not found in cdb we use mysql server set with -d argument
 			 * but connection will not be successful, we need user encrypted password which should be in cdb file

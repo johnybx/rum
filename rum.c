@@ -2,7 +2,7 @@
 
 /* some global variables */
 struct listener *first_listener;
-struct destination *first_destination;
+struct destination *first_destination=NULL;
 struct event_base *event_base;
 
 extern char *mysql_cdb_file;
@@ -22,6 +22,7 @@ int main (int ac, char *av[]) {
 
 	signal(SIGPIPE ,SIG_IGN);
 
+    char *mysqltype=NULL;
 
 	if (ac==1) {
 		usage();
@@ -33,11 +34,10 @@ int main (int ac, char *av[]) {
 	 * 
 	 * struct listener is the same
 	 */
-	first_destination=destination=malloc(sizeof(struct destination));
 
 	listener=NULL;
 
-	while ((ch = getopt(ac, av, "bd:s:m:l:M:")) != -1) {
+	while ((ch = getopt(ac, av, "bd:s:m:l:M:i:")) != -1) {
 		switch (ch) {
 			case 'b':
 				daemonize=1;
@@ -69,11 +69,15 @@ int main (int ac, char *av[]) {
 				mysql_cdb_file=strdup(optarg);
 			break;
 			case 'd':
+                first_destination=destination=malloc(sizeof(struct destination));
 				prepareclient(optarg, destination);
 			break;
 			case 'l':
 				logfile=strdup(optarg);
 			break;
+            case 'i':
+                mysqltype=optarg;
+            break;   
 		}
 	}
 
@@ -87,7 +91,7 @@ int main (int ac, char *av[]) {
 	 * so it is race condition free (safe to free and init global cdb variable)
 	 */
 	if (mysql_cdb_file) {
-		init_mysql_cdb_file();
+		init_mysql_cdb_file(mysqltype);
 	}
 
 	if (daemonize) {

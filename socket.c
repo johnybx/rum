@@ -113,13 +113,11 @@ void accept_connect(int sock, short event, void *arg) {
 		s = (struct sockaddr *) &sun;
 	}
 
-	csock=accept(sock, s, &len);
+	csock=accept4(sock, s, &len, SOCK_NONBLOCK);
 
 	if (csock==-1) {
 		return;
 	}
-
-	fcntl(csock, F_SETFL, O_RDWR|O_NONBLOCK);
 
 	listener->nr_allconn++;
 
@@ -180,18 +178,18 @@ void accept_connect(int sock, short event, void *arg) {
 	/* read buffer 64kb */
 	bufferevent_setwatermark(bev_target, EV_READ, 0, INPUT_BUFFER_LIMIT);
 
-	if (destination->s[0] == SOCKET_TCP) {
-		s = (struct sockaddr *) &destination->sin;
-		len = destination->addrlen;
-	} else {
-		s = (struct sockaddr *) &destination->sun;
-		len = destination->addrlen;
-	}
-
 	/* we can use cached init packet only if we can use MITM attack,
 	 * we can use MITM attack only if we use mysql_cdb_file where are hashed user passwords
 	 */
 	if (!mysql_cdb_file || (mysql_cdb_file && !cache_mysql_init_packet)) {
+        if (destination->s[0] == SOCKET_TCP) {
+            s = (struct sockaddr *) &destination->sin;
+            len = destination->addrlen;
+        } else {
+            s = (struct sockaddr *) &destination->sun;
+            len = destination->addrlen;
+        }
+
 		bev_arg_target->connecting=1;
 		if (bufferevent_socket_connect(bev_target, s, len)==-1) {
 			listener->nr_conn--;
