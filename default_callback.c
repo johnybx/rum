@@ -94,6 +94,9 @@ void event_callback(struct bufferevent *bev, short events, void *ptr) {
 
 		/* connection to remote host is successful, enable EV_READ */
 		if (events & BEV_EVENT_CONNECTED) {
+            event_free(bev_arg->connect_timer);
+            bev_arg->connect_timer=NULL;
+
 			bufferevent_enable(bev, EV_READ);
 			bufferevent_enable(bev_remote, EV_READ);
 		/* error or eof */
@@ -129,4 +132,18 @@ void event_callback(struct bufferevent *bev, short events, void *ptr) {
 		bufferevent_free(bev);
 		free(bev_arg);
 	}
+}
+
+void connect_timeout_cb(evutil_socket_t fd, short what, void *arg) {
+	struct bev_arg *bev_arg=arg;
+
+    event_free(bev_arg->connect_timer);
+
+    if (bev_arg->remote) {
+	    bufferevent_free(bev_arg->remote->bev);
+	    free(bev_arg->remote);
+    }
+
+	bufferevent_free(bev_arg->bev);
+	free(bev_arg);
 }

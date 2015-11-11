@@ -7,7 +7,11 @@ struct cdb cdb;
 int cdb_fd;
 struct event *ev_signal;
 
-void init_mysql_cdb_file() {
+extern char *cache_mysql_init_packet;
+extern int cache_mysql_init_packet_len;
+
+
+void init_mysql_cdb_file(char *type) {
 	struct timeval tv;
 
 	if ((cdb_fd=open(mysql_cdb_file, O_RDONLY))==-1) {
@@ -22,7 +26,25 @@ void init_mysql_cdb_file() {
 	tv.tv_sec=CDB_RELOAD_TIME;
 	event_add(ev_signal, &tv);
 
-	cache_init_packet_from_server();
+    if (type==NULL) {
+	    cache_init_packet_from_server();
+    } else {
+        /* if we specify type of mysqlserver via -i mysql50|mysql51|mariadb55 we use hardcoded init packet */
+        if (!strcmp(type,"mysql50")) {
+            cache_mysql_init_packet=malloc(sizeof(MYSQL50_INIT_PACKET)-1);
+            memcpy(cache_mysql_init_packet,MYSQL50_INIT_PACKET,sizeof(MYSQL50_INIT_PACKET)-1);
+            cache_mysql_init_packet_len=sizeof(MYSQL50_INIT_PACKET)-1;
+        } else if (!strcmp(type,"mysql51")) {
+            cache_mysql_init_packet=malloc(sizeof(MYSQL51_INIT_PACKET)-1);
+            memcpy(cache_mysql_init_packet,MYSQL51_INIT_PACKET,sizeof(MYSQL51_INIT_PACKET)-1);
+            cache_mysql_init_packet_len=sizeof(MYSQL51_INIT_PACKET)-1;
+        } else if (!strcmp(type,"mariadb55")) {
+            cache_mysql_init_packet=malloc(sizeof(MARIADB55_INIT_PACKET)-1);
+            memcpy(cache_mysql_init_packet,MARIADB55_INIT_PACKET,sizeof(MARIADB55_INIT_PACKET)-1);
+            cache_mysql_init_packet_len=sizeof(MARIADB55_INIT_PACKET)-1;
+        }
+    }
+    
 }
 
 

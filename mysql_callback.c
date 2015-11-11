@@ -144,6 +144,9 @@ void mysql_event_callback(struct bufferevent *bev, short events, void *ptr) {
 
 		/* connection to server successful, enable EV_READ */
 		if (events & BEV_EVENT_CONNECTED) {
+            event_free(bev_arg->connect_timer);
+            bev_arg->connect_timer=NULL;
+
 			bufferevent_enable(bev, EV_READ);
 			if (bev_remote)
 				bufferevent_enable(bev_remote, EV_READ);
@@ -225,9 +228,33 @@ void cache_mysql_init_packet_event_callback(struct bufferevent *bev, short event
 	struct bev_arg *bev_arg=ptr;
 
 	if (events & BEV_EVENT_CONNECTED) {
+        event_free(bev_arg->connect_timer);
+        bev_arg->connect_timer=NULL;
+
 		bufferevent_enable(bev, EV_READ);
 	} else if (events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) {
 		bufferevent_free(bev);
 		free(bev_arg);
 	}
+}
+
+void mysql_connect_timeout_cb(evutil_socket_t fd, short what, void *arg) {
+	struct bev_arg *bev_arg=arg;
+
+    event_free(bev_arg->connect_timer);
+
+	if (bev_arg->ms) {
+	    free_ms(bev_arg->ms);
+        bev_arg->ms=NULL;
+        bev_arg->remote->ms=NULL;
+    }
+
+
+    if (bev_arg->remote) {
+	    bufferevent_free(bev_arg->remote->bev);
+	    free(bev_arg->remote);
+    }
+
+	bufferevent_free(bev_arg->bev);
+	free(bev_arg);
 }
