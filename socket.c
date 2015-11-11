@@ -101,7 +101,6 @@ void accept_connect(int sock, short event, void *arg) {
 	int csock=0;
 	struct bufferevent *bev_client, *bev_target;
 	struct bev_arg *bev_arg_client, *bev_arg_target;
-	int flag = 1;
 
 	struct destination *destination=first_destination;
 	struct sockaddr *s=NULL;
@@ -115,7 +114,6 @@ void accept_connect(int sock, short event, void *arg) {
 	}
 
 	csock=accept4(sock, s, &len, SOCK_NONBLOCK);
-	setsockopt(csock, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof (int));
 
 	if (csock==-1) {
 		return;
@@ -219,8 +217,6 @@ void accept_connect(int sock, short event, void *arg) {
 
         bev_arg_target->connect_timer=event_new(event_base, -1, 0, connect_timeout_cb, bev_arg_target);
         event_add(bev_arg_target->connect_timer, &time);
-
-        bev_arg_target->destination=destination;
 	} else {
 		/* use cached init packet */
 		bev_arg_client->remote=NULL;
