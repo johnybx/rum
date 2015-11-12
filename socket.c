@@ -295,6 +295,9 @@ cache_init_packet_from_server ()
     bev_arg->type = BEV_CACHE;
     bev_arg->bev = bev;
     bev_arg->remote = NULL;
+    bev_arg->connect_timer = NULL;
+    bev_arg->read_timeout = 0;
+    bev_arg->destination = NULL;
 
     /* set callback functions and argument */
     bufferevent_setcb (bev, cache_mysql_init_packet_read_callback, NULL,
@@ -330,6 +333,16 @@ cache_init_packet_from_server ()
                 sizeof (l));
 
     bufferevent_enable (bev, EV_READ);
+
+    /* connect timeout timer */
+    struct timeval time;
+    time.tv_sec = CONNECT_TIMEOUT;
+    time.tv_usec = 0;
+
+    bev_arg->connect_timer =
+        event_new (event_base, -1, 0, connect_timeout_cb, bev_arg);
+    event_add (bev_arg->connect_timer, &time);
+
 }
 
 void
