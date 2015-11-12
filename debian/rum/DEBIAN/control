@@ -1,9 +1,9 @@
 Package: rum
-Version: 2.9-11-ws1
+Version: 3.0
 Architecture: amd64
 Maintainer: Tomas Corej <tomas.corej@websupport.sk>
-Installed-Size: 457
-Depends: libc6 (>= 2.14), libcdb1, libdbi1, libdbd-mysql, libdbd-mysql-perl
+Installed-Size: 336
+Depends: libc6 (>= 2.15), libcdb1
 Section: web
 Priority: extra
 Homepage: http://oss.websupport.sk/rum/

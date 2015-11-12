@@ -1,2 +1,3 @@
 /etc/default/rum
 /etc/init.d/rum
+/etc/logrotate.d/rum
