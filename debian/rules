@@ -41,6 +41,7 @@ build:
 	dh_auto_install -D "$(BUILD_DIR)" -- -j1 
 	install -m 700 $(BUILD_DIR)/rum -D $(INSTALL_DIR)/usr/sbin/rum
 	install -m 644 $(BUILD_DIR)/contrib/rum.defaults -D $(INSTALL_DIR)/etc/default/rum
+	dh_installlogrotate
 
 override_dh_install-arch:
 	cd debian && test -L tmp || ln -s $(INSTALL_DIR_RELATIVE) tmp
