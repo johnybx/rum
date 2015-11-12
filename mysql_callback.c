@@ -175,6 +175,7 @@ mysql_event_callback (struct bufferevent *bev, short events, void *ptr)
             time.tv_sec = READ_TIMEOUT;
             time.tv_usec = 0;
             bufferevent_set_timeouts (bev, &time, NULL);
+            bev_arg->read_timeout = 1;
 
             /* error or eof */
         } else if (events &
