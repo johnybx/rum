@@ -6,10 +6,14 @@ struct destination *first_destination=NULL;
 struct event_base *event_base;
 
 extern char *mysql_cdb_file;
+char **argvptr; 
+int *argcptr; 
 
 int main (int ac, char *av[]) {
 	int ret,ch,daemonize=0;
 	char *logfile=NULL;
+    argvptr=av;
+    argcptr=&ac;
 	
 	struct destination *destination;
 	struct listener *listener;
@@ -138,4 +142,69 @@ void usage() {
 	exit(-1);
 }
 
+void logmsg(const char *fmt, ...){
+    va_list args;
+    FILE *fp;
+    char outstr[200];
+    time_t t;
+    struct tm *tmp;
+    int i;
 
+    t = time(NULL);
+    tmp = localtime(&t);
+    if (tmp==NULL) {
+        perror("localtime");
+        return;
+    }
+
+    fp=fopen("/var/log/rum.log","a");
+    if (!fp) {
+        fprintf(stderr, "cannot open logfile\n");
+        fflush(stderr);
+        return;
+    }
+
+    if (strftime(outstr, sizeof(outstr), "%Y-%m-%d %H:%M:%S", tmp) == 0) {
+        fprintf(stderr, "strftime returned 0");
+        fclose(fp);
+        return;
+    }
+
+    fprintf(fp, "%s ",outstr);
+
+    fprintf(fp, "[");
+    for (i=0;i<*argcptr;i++) {
+        if (i==*argcptr-1) {
+            fprintf(fp,"%s",argvptr[i]);
+        } else {
+            fprintf(fp,"%s ",argvptr[i]);
+        }
+    }
+    fprintf(fp, "] ");
+    
+
+    va_start(args, fmt);
+    vfprintf(fp,fmt,args);
+    va_end(args);
+/*    fprintf(fp, " (open fds: %d)\n", get_num_fds()); */
+    fflush(fp);
+    fclose(fp);
+}
+
+/* implementation of Donal Fellows method */ 
+int get_num_fds()
+{
+     int fd_count;
+     char buf[64];
+     struct dirent *dp;
+
+     snprintf(buf, 64, "/proc/%i/fd/", getpid());
+
+     fd_count = 0;
+     DIR *dir = opendir(buf);
+     while ((dp = readdir(dir)) != NULL) {
+          fd_count++;
+     }
+     closedir(dir);
+     return fd_count;
+}

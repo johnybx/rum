@@ -6,7 +6,7 @@ LIBEVENT_DIR=libevent-2.0.22-stable
 #LDFLAGS=-flto
 LDLIBS=-L ${LIBEVENT_DIR}/.libs -levent_core -lrt -lcdb -lm
 #CFLAGS=-Wall -O2 -flto -I ${LIBEVENT_DIR}/include
-CFLAGS=-Wall -O2 -g -I ${LIBEVENT_DIR}/include
+CFLAGS=-Wall -O1 -g -I ${LIBEVENT_DIR}/include
 
 all: ${LIBEVENT_DIR}/.libs/libevent.a rum 
 

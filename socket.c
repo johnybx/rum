@@ -8,6 +8,8 @@ extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern char *cache_mysql_init_packet_scramble;
 
+int logfd;
+
 /*
  * create_listen_socket return O_NONBLOCK socket ready for accept()
  * arg - tcp:blah:blah alebo sock:blah
@@ -88,6 +90,7 @@ void prepareclient(char *arg, struct destination *destination) {
 	destination->next=NULL;
 
 	parse_arg(arg_copy, &type, &destination->sin, &destination->sun, &destination->addrlen, &port, &host_str, &port_str, &sockfile_str, 0);
+    free(arg_copy);
 }
 
 /*
@@ -135,6 +138,8 @@ void accept_connect(int sock, short event, void *arg) {
 	bev_arg_client->listener=listener;
 	bev_arg_client->bev=bev_client;
 	bev_arg_client->connecting=0;
+    bev_arg_client->connect_timer=NULL;
+    bev_arg_client->destination=NULL;
 
 	/* set callback functions and argument */
 	if (listener->type==LISTENER_DEFAULT) {
@@ -192,6 +197,7 @@ void accept_connect(int sock, short event, void *arg) {
 
 		bev_arg_target->connecting=1;
 		if (bufferevent_socket_connect(bev_target, s, len)==-1) {
+            logmsg("bufferevent_socket_connect return -1 (full fd?)\n");
 			listener->nr_conn--;
 			bufferevent_free(bev_client);
 			bufferevent_free(bev_target);
@@ -217,6 +223,7 @@ void accept_connect(int sock, short event, void *arg) {
 
         bev_arg_target->connect_timer=event_new(event_base, -1, 0, connect_timeout_cb, bev_arg_target);
         event_add(bev_arg_target->connect_timer, &time);
+        bev_arg_target->destination=destination;
 	} else {
 		/* use cached init packet */
 		bev_arg_client->remote=NULL;
@@ -274,6 +281,7 @@ void cache_init_packet_from_server() {
 	/* event_callback() will be called after nonblock connect() return 
 	 */
 	if (bufferevent_socket_connect(bev, s, len)==-1) {
+        logmsg("bufferevent_socket_connect return -1 (full fd?)\n");
 		bufferevent_free(bev);
 		free(bev_arg);
 		return;
@@ -287,4 +295,7 @@ void cache_init_packet_from_server() {
 	setsockopt(bufferevent_getfd(bev), SOL_SOCKET, SO_LINGER, (void *) &l, sizeof (l));
 
 	bufferevent_enable(bev, EV_READ);
+}
+
+void log_cb() {
 }

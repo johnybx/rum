@@ -103,6 +103,12 @@ void event_callback(struct bufferevent *bev, short events, void *ptr) {
 			bufferevent_enable(bev_remote, EV_READ);
 		/* error or eof */
 		} else if (events & (BEV_EVENT_ERROR|BEV_EVENT_EOF) ) {
+            if (events & BEV_EVENT_ERROR) {
+                logmsg("BEV_EVENT_ERROR dest: %s %s\n", bev_arg->destination?"target":"client", bev_arg->destination?bev_arg->destination->s:"none");
+//            } else if (events & BEV_EVENT_EOF) {
+//                logmsg("BEV_EVENT_EOF dest: %s %s\n", bev_arg->destination?"target":"client", bev_arg->destination?bev_arg->destination->s:"none");
+            }
+
             if (bev_arg->connect_timer) {
                 event_free(bev_arg->connect_timer);
                 bev_arg->connect_timer=NULL;
@@ -131,10 +137,11 @@ void event_callback(struct bufferevent *bev, short events, void *ptr) {
 
 			free(bev_arg);
 		} else {
-            /* TODO: log some error */
+            logmsg("unknown events: %d\n",events);
         }
 	} else {
-        /* can this happend ? */
+        logmsg("remote socket doesnt exist ?\n");
+
         if (bev_arg->connect_timer) {
             event_free(bev_arg->connect_timer);
             bev_arg->connect_timer=NULL;
@@ -151,7 +158,12 @@ void event_callback(struct bufferevent *bev, short events, void *ptr) {
 void connect_timeout_cb(evutil_socket_t fd, short what, void *arg) {
 	struct bev_arg *bev_arg=arg;
 
-    event_free(bev_arg->connect_timer);
+    logmsg("connection timeout to %s\n", bev_arg->destination->s);
+
+    if (bev_arg->connect_timer) {
+        event_free(bev_arg->connect_timer);
+        bev_arg->connect_timer=NULL;
+    }
 
     if (bev_arg->remote) {
 	    bufferevent_free(bev_arg->remote->bev);

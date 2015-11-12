@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <netdb.h>
 #include <fcntl.h>
 #include <syslog.h>
@@ -17,6 +18,8 @@
 #include <signal.h>
 #include <cdb.h>
 #include <string.h>
+#include <time.h>
+#include <dirent.h>
 
 #include "event2/event.h"
 #include "event2/bufferevent.h"
@@ -94,6 +97,7 @@ struct bev_arg {
 	/* used as workaround for bug in bufferevent_socket_connect() */
 	char connecting;
     struct event *connect_timer;
+    struct destination *destination;
 };
 
 struct mysql_mitm {
@@ -119,6 +123,8 @@ struct mysql_mitm {
 
 /* main.c */
 void usage();
+void logmsg(const char *fmt, ...);
+int get_num_fds();
 
 /* socket.c */
 int create_listen_socket(char *wwtf);
@@ -162,3 +168,4 @@ void reopen_cdb(int sig, short event, void *a);
 void stats_event_callback(struct bufferevent *bev, short callbacks, void *ptr);
 void stats_write_callback(struct bufferevent *bev, void *ptr);
 void send_stats_to_client(struct bufferevent *bev);
+
