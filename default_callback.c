@@ -94,13 +94,19 @@ void event_callback(struct bufferevent *bev, short events, void *ptr) {
 
 		/* connection to remote host is successful, enable EV_READ */
 		if (events & BEV_EVENT_CONNECTED) {
-            event_free(bev_arg->connect_timer);
-            bev_arg->connect_timer=NULL;
+            if (bev_arg->connect_timer) {
+                event_free(bev_arg->connect_timer);
+                bev_arg->connect_timer=NULL;
+            }
 
 			bufferevent_enable(bev, EV_READ);
 			bufferevent_enable(bev_remote, EV_READ);
 		/* error or eof */
 		} else if (events & (BEV_EVENT_ERROR|BEV_EVENT_EOF) ) {
+            if (bev_arg->connect_timer) {
+                event_free(bev_arg->connect_timer);
+                bev_arg->connect_timer=NULL;
+            }
 			if (bev_arg->connecting) {
 				/* this code is called from another event function, return immediately and dont free anything 
 				 * this is probably a bug in libevent, in evbuffer_socket_connect() when connect() fail event_callback is directly called
@@ -124,12 +130,20 @@ void event_callback(struct bufferevent *bev, short events, void *ptr) {
 			}
 
 			free(bev_arg);
-		}
+		} else {
+            /* TODO: log some error */
+        }
 	} else {
-		/* if remote socket doesnt exist, free self and close socket */
-		bev_arg->listener->nr_conn--;
+        /* can this happend ? */
+        if (bev_arg->connect_timer) {
+            event_free(bev_arg->connect_timer);
+            bev_arg->connect_timer=NULL;
+        }
 
 		bufferevent_free(bev);
+
+		/* if remote socket doesnt exist, free self and close socket */
+		bev_arg->listener->nr_conn--;
 		free(bev_arg);
 	}
 }
