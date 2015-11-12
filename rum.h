@@ -37,6 +37,7 @@
 #define OUTPUT_BUFFER_LIMIT 65535
 
 #define CONNECT_TIMEOUT 3
+#define READ_TIMEOUT 3 /* only for first data from server, if mysql is stuck and dont send any data within READ_TIMEOUT we drop connection */
 
 /* cdb file is reopened every 2 seconds */
 #define CDB_RELOAD_TIME 2
@@ -97,6 +98,7 @@ struct bev_arg {
 	/* used as workaround for bug in bufferevent_socket_connect() */
 	char connecting;
     struct event *connect_timer;
+    short read_timeout;
     struct destination *destination;
 };
 

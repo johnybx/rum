@@ -25,6 +25,12 @@ void mysql_read_callback(struct bufferevent *bev, void *ptr)
 				bev_arg->listener->input_bytes+=len;
 			} else if (bev_arg->type==BEV_TARGET) {
 				bev_arg->listener->output_bytes+=len;
+                /* disable read timeout from server when we receive first data*/
+                if (bev_arg->read_timeout) {
+                    bufferevent_set_timeouts(bev, NULL, NULL); 
+                    bev_arg->read_timeout=0;
+                }
+
 			}
 		}
 	
@@ -152,10 +158,19 @@ void mysql_event_callback(struct bufferevent *bev, short events, void *ptr) {
 			bufferevent_enable(bev, EV_READ);
 			if (bev_remote)
 				bufferevent_enable(bev_remote, EV_READ);
+
+            /* setup read timeout for connection from target server */
+            struct timeval time;
+            time.tv_sec = READ_TIMEOUT;
+            time.tv_usec = 0;
+            bufferevent_set_timeouts(bev, &time, NULL); 
+
 		/* error or eof */
-		} else if (events & (BEV_EVENT_ERROR|BEV_EVENT_EOF) ) {
+		} else if (events & (BEV_EVENT_ERROR|BEV_EVENT_EOF|BEV_EVENT_TIMEOUT) ) {
             if (events & BEV_EVENT_ERROR) {
                 logmsg("BEV_EVENT_ERROR dest: %s %s\n", bev_arg->destination?"target":"client", bev_arg->destination?bev_arg->destination->s:"none");
+            } else if (events & BEV_EVENT_TIMEOUT) {
+                logmsg("BEV_EVENT_TIMEOUT dest: %s %s\n", bev_arg->destination?"target":"client", bev_arg->destination?bev_arg->destination->s:"none");
             }
             if (bev_arg->connect_timer) {
                 event_free(bev_arg->connect_timer);

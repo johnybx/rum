@@ -290,6 +290,7 @@ int handle_auth_packet_from_client(struct bev_arg *bev_arg, struct bufferevent *
 
 
 	if (bufferevent_socket_connect(bev_remote, (struct sockaddr *)&destination->sin, destination->addrlen)==-1) {
+        logmsg("bufferevent_socket_connect return -1 (full fd?)\n");
 		/* this if is needed here, because if connect() fails libevent will call mysql_event_callback
 		 * immediately, and not from main event loop. so bev_arg->ms can be already freed
 		 */
@@ -332,6 +333,7 @@ int handle_auth_packet_from_client(struct bev_arg *bev_arg, struct bufferevent *
 
     bev_arg_remote->connect_timer=event_new(event_base, -1, 0, mysql_connect_timeout_cb, bev_arg_remote);
     event_add(bev_arg_remote->connect_timer, &time);
+    bev_arg_remote->destination=destination;
 
 	return 1;
 }

@@ -139,6 +139,7 @@ void accept_connect(int sock, short event, void *arg) {
 	bev_arg_client->bev=bev_client;
 	bev_arg_client->connecting=0;
     bev_arg_client->connect_timer=NULL;
+    bev_arg_client->read_timeout=0;
     bev_arg_client->destination=NULL;
 
 	/* set callback functions and argument */
@@ -172,6 +173,10 @@ void accept_connect(int sock, short event, void *arg) {
 	bev_arg_target->bev=bev_target;
 	bev_arg_target->remote=bev_arg_client;
 
+    bev_arg_target->connect_timer=NULL;
+    bev_arg_target->read_timeout=0;
+
+
 	if (!mysql_cdb_file) {
 		bufferevent_setcb(bev_target, read_callback, NULL, event_callback, (void *)bev_arg_target);
 	} else {
@@ -196,6 +201,8 @@ void accept_connect(int sock, short event, void *arg) {
         }
 
 		bev_arg_target->connecting=1;
+        bev_arg_target->destination=destination;
+
 		if (bufferevent_socket_connect(bev_target, s, len)==-1) {
             logmsg("bufferevent_socket_connect return -1 (full fd?)\n");
 			listener->nr_conn--;
@@ -223,7 +230,6 @@ void accept_connect(int sock, short event, void *arg) {
 
         bev_arg_target->connect_timer=event_new(event_base, -1, 0, connect_timeout_cb, bev_arg_target);
         event_add(bev_arg_target->connect_timer, &time);
-        bev_arg_target->destination=destination;
 	} else {
 		/* use cached init packet */
 		bev_arg_client->remote=NULL;
