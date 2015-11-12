@@ -1,8 +1,11 @@
-rum (2.9-11-ws1) precise; urgency=low
+rum (3.0) precise; urgency=low
 
-  * Removed /root/bin/export_mariadb55_cdb.pl and its cron entry
+  * logging of errors to /var/log/rum.log
+  * 3s timeout on connect()
+  * 3s timeout on first read() from mysql server
+  * -i mysql50|mysql51|mysql55 support instead of -d with -M
 
- -- Tomas Corej <tomas.corej@websupport.sk>  Thu, 29 Jan 2015 10:22:50 +0100
+ -- Pavel Stano <pavel.stano@websupport.sk>  Thu, 29 Jan 2015 10:22:50 +0100
 
 rum (2.9-11) precise; urgency=low
 
