@@ -309,6 +309,8 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
     bev_arg->ms->handshake = 2;
 
+    bev_arg_remote->read_timeout = 0;
+
     bev_arg_remote->connecting = 0;
 
     bufferevent_setcb (bev_remote, mysql_read_callback, NULL,
