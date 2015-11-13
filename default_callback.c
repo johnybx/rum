@@ -124,16 +124,12 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
             /* error or eof */
         } else if (events &
                    (BEV_EVENT_ERROR | BEV_EVENT_EOF | BEV_EVENT_TIMEOUT)) {
-            if (events & BEV_EVENT_ERROR) {
-                logmsg ("BEV_EVENT_ERROR dest: %s %s\n",
-                        bev_arg->destination ? "target" : "client",
-                        bev_arg->destination ? bev_arg->destination->
-                        s : "none");
-            } else if (events & BEV_EVENT_TIMEOUT) {
-                logmsg ("BEV_EVENT_TIMEOUT dest: %s %s\n",
-                        bev_arg->destination ? "target" : "client",
-                        bev_arg->destination ? bev_arg->destination->
-                        s : "none");
+            if (bev_arg->type == BEV_TARGET) {
+                if (events & BEV_EVENT_ERROR) {
+                    logmsg ("BEV_EVENT_ERROR dest: %s\n", bev_arg->destination->s);
+                } else if (events & BEV_EVENT_TIMEOUT) {
+                    logmsg ("BEV_EVENT_TIMEOUT dest: %s\n", bev_arg->destination->s);
+                }
             }
 
             if (bev_arg->connect_timer) {
