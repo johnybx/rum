@@ -230,14 +230,18 @@ accept_connect (int sock, short event, void *arg)
             return;
         }
         bev_arg_target->connecting = 0;
+/*
         struct linger l;
+*/
         int flag = 1;
 
+/*
         l.l_onoff = 1;
         l.l_linger = 0;
 
         setsockopt (bufferevent_getfd (bev_target), SOL_SOCKET, SO_LINGER,
                     (void *) &l, sizeof (l));
+*/
         setsockopt (bufferevent_getfd (bev_target), IPPROTO_TCP, TCP_NODELAY,
                     (char *) &flag, sizeof (int));
 
