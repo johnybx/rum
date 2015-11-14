@@ -320,7 +320,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
     bufferevent_setwatermark (bev_remote, EV_READ, 0, INPUT_BUFFER_LIMIT);
     bev_arg_remote->connecting = 1;
-
+    bev_arg_remote->destination = destination;
 
     if (bufferevent_socket_connect
         (bev_remote, (struct sockaddr *) &destination->sin,
@@ -375,7 +375,6 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
         event_new (event_base, -1, 0, mysql_connect_timeout_cb,
                    bev_arg_remote);
     event_add (bev_arg_remote->connect_timer, &time);
-    bev_arg_remote->destination = destination;
 
     return 1;
 }
