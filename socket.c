@@ -368,8 +368,6 @@ cache_init_packet_from_server ()
 
     setsockopt (bufferevent_getfd (bev), SOL_SOCKET, SO_LINGER, (void *) &l,
                 sizeof (l));
-
-    bufferevent_enable (bev, EV_READ);
 }
 
 void
