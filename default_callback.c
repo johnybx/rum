@@ -184,7 +184,11 @@ connect_timeout_cb (evutil_socket_t fd, short what, void *arg)
 {
     struct bev_arg *bev_arg = arg;
 
-    logmsg ("connection timeout to %s\n", bev_arg->destination->s);
+    if (bev_arg->destination) {
+        logmsg ("connection timeout to %s\n", bev_arg->destination->s);
+    } else {
+        logmsg ("connection timeout to unknown\n");
+    }
 
     if (bev_arg->connect_timer) {
         event_free (bev_arg->connect_timer);
