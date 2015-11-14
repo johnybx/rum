@@ -27,6 +27,7 @@ create_listen_socket (char *arg)
     char type;
     int domain;
     char *host_str, *port_str, *sockfile_str;
+    int i,ok;
 
     arg_copy = strdup (arg);
     /* parse string arg_copy into variables
@@ -54,13 +55,33 @@ create_listen_socket (char *arg)
     sockopt = 1;
     setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof (sockopt));
 
-    if (bind (sock, s, socklen) == -1) {
-        perror ("bind");
+    for (i=0,ok=0;i<25;i++) {
+        if (bind (sock, s, socklen) == -1) {
+            /* if cannot bind sleep 200ms and retry 25x */
+            fprintf(stderr,"bind() to %s failed\n", arg);
+            usleep(200*1000);
+        } else {
+            ok=1;
+            break;
+        }
+    }
+    if (ok==0) {
+        fprintf(stderr,"bind() to %s failed, exiting\n", arg);
         _exit (-1);
     }
 
-    if (listen (sock, 255) == -1) {
-        perror ("listen");
+    for (i=0,ok=0;i<20;i++) {
+        if (listen (sock, 255) == -1) {
+            /* if cannot bind sleep 200ms and retry 20x */
+            fprintf(stderr,"listen() to %s failed", arg);
+            usleep(200*1000);
+        } else {
+            ok=1;
+            break;
+        }
+    }
+    if (ok==0) {
+        fprintf(stderr,"bind() to %s failed, exiting", arg);
         _exit (-1);
     }
 
