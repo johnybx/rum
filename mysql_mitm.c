@@ -349,17 +349,13 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
         return 1;
     }
     bev_arg_remote->connecting = 0;
-/*
     struct linger l;
-*/
     int flag = 1;
 
-/*
     l.l_onoff = 1;
     l.l_linger = 0;
     setsockopt (bufferevent_getfd (bev_remote), SOL_SOCKET, SO_LINGER,
                 (void *) &l, sizeof (l));
-*/
     setsockopt (bufferevent_getfd (bev_remote), IPPROTO_TCP, TCP_NODELAY,
                 (char *) &flag, sizeof (int));
 

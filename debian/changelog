@@ -1,3 +1,11 @@
+rum (3.1) precise; urgency=medium
+
+  * segfault fix on burst of new connections
+  * retry bind()/listen() if fail at startup
+  * reenable SO_LINGER in connections to server to reduce conntrack/time-wait on burst of new connections
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Sat, 14 Nov 2015 13:58:57 +0100
+
 rum (3.0) precise; urgency=low
 
   * logging of errors to /var/log/rum.log
