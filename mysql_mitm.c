@@ -322,6 +322,16 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
     bev_arg_remote->connecting = 1;
     bev_arg_remote->destination = destination;
 
+    /* connect timeout timer */
+    struct timeval time;
+    time.tv_sec = CONNECT_TIMEOUT;
+    time.tv_usec = 0;
+
+    bev_arg_remote->connect_timer =
+        event_new (event_base, -1, 0, mysql_connect_timeout_cb,
+                   bev_arg_remote);
+    event_add (bev_arg_remote->connect_timer, &time);
+
     if (bufferevent_socket_connect
         (bev_remote, (struct sockaddr *) &destination->sin,
          destination->addrlen) == -1) {
@@ -329,6 +339,11 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
         /* this if is needed here, because if connect() fails libevent will call mysql_event_callback
          * immediately, and not from main event loop. so bev_arg->ms can be already freed
          */
+
+        if (bev_arg_remote->connect_timer) {
+            event_free(bev_arg_remote->connect_timer);
+        }
+
         if (bev_arg->ms) {
             free_ms (bev_arg->ms);
             bev_arg->ms = NULL;
@@ -361,16 +376,6 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
     if (mysql_server)
         free (mysql_server);
-
-    /* connect timeout timer */
-    struct timeval time;
-    time.tv_sec = CONNECT_TIMEOUT;
-    time.tv_usec = 0;
-
-    bev_arg_remote->connect_timer =
-        event_new (event_base, -1, 0, mysql_connect_timeout_cb,
-                   bev_arg_remote);
-    event_add (bev_arg_remote->connect_timer, &time);
 
     return 1;
 }
