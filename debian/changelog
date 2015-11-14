@@ -1,3 +1,9 @@
+rum (3.2) precise; urgency=medium
+
+  * fix occasional segfault after starting rum
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Sat, 14 Nov 2015 23:21:54 +0100
+
 rum (3.1) precise; urgency=medium
 
   * segfault fix on burst of new connections
