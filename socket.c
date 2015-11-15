@@ -240,21 +240,9 @@ accept_connect (int sock, short event, void *arg)
         bev_arg_target->connecting = 1;
         bev_arg_target->destination = destination;
 
-        /* connect timeout timer */
-        struct timeval time;
-        time.tv_sec = CONNECT_TIMEOUT;
-        time.tv_usec = 0;
-
-        bev_arg_target->connect_timer =
-            event_new (event_base, -1, 0, connect_timeout_cb, bev_arg_target);
-        event_add (bev_arg_target->connect_timer, &time);
-
         if (bufferevent_socket_connect (bev_target, s, len) == -1) {
             logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
             listener->nr_conn--;
-            if (bev_arg_target->connect_timer) {
-                event_free(bev_arg_target->connect_timer);
-            }
             bufferevent_free (bev_client);
             bufferevent_free (bev_target);
             free (bev_arg_client);
@@ -273,6 +261,19 @@ accept_connect (int sock, short event, void *arg)
                     (void *) &l, sizeof (l));
         setsockopt (bufferevent_getfd (bev_target), IPPROTO_TCP, TCP_NODELAY,
                     (char *) &flag, sizeof (int));
+
+        /* connect timeout timer */
+        struct timeval time;
+        time.tv_sec = CONNECT_TIMEOUT;
+        time.tv_usec = 0;
+
+        bev_arg_target->connect_timer =
+            event_new (event_base, -1, 0, connect_timeout_cb, bev_arg_target);
+        if (bev_arg_target->connect_timrer) {
+            event_add (bev_arg_target->connect_timer, &time);
+        }
+
+
 
     } else {
         /* use cached init packet */
@@ -340,22 +341,10 @@ cache_init_packet_from_server ()
         len = destination->addrlen;
     }
 
-    /* connect timeout timer */
-    struct timeval time;
-    time.tv_sec = CONNECT_TIMEOUT;
-    time.tv_usec = 0;
-
-    bev_arg->connect_timer =
-        event_new (event_base, -1, 0, connect_timeout_cb, bev_arg);
-    event_add (bev_arg->connect_timer, &time);
-
     /* event_callback() will be called after nonblock connect() return 
      */
     if (bufferevent_socket_connect (bev, s, len) == -1) {
         logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
-        if (bev_arg->connect_timer) {
-            event_free(bev_arg->connect_timer);
-        }
         bufferevent_free (bev);
         free (bev_arg);
         return;
@@ -368,6 +357,17 @@ cache_init_packet_from_server ()
 
     setsockopt (bufferevent_getfd (bev), SOL_SOCKET, SO_LINGER, (void *) &l,
                 sizeof (l));
+
+    /* connect timeout timer */
+    struct timeval time;
+    time.tv_sec = CONNECT_TIMEOUT;
+    time.tv_usec = 0;
+
+    bev_arg->connect_timer =
+        event_new (event_base, -1, 0, connect_timeout_cb, bev_arg);
+    if (bev_arg->connect_timer) {
+        event_add (bev_arg->connect_timer, &time);
+    }
 }
 
 void
