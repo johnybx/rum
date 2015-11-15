@@ -269,7 +269,7 @@ accept_connect (int sock, short event, void *arg)
 
         bev_arg_target->connect_timer =
             event_new (event_base, -1, 0, connect_timeout_cb, bev_arg_target);
-        if (bev_arg_target->connect_timrer) {
+        if (bev_arg_target->connect_timer) {
             event_add (bev_arg_target->connect_timer, &time);
         }
 

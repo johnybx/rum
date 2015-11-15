@@ -50,6 +50,9 @@ init_mysql_cdb_file (char *type)
             memcpy (cache_mysql_init_packet, MARIADB55_INIT_PACKET,
                     sizeof (MARIADB55_INIT_PACKET) - 1);
             cache_mysql_init_packet_len = sizeof (MARIADB55_INIT_PACKET) - 1;
+        } else {
+            fprintf (stderr, "unknown mysql type: %s\n", type);
+            exit (-1);
         }
     }
 
