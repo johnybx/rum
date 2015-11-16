@@ -264,7 +264,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
                 prepareclient (mysql_server, destination);
             }
         } else {
-            dst = destination = malloc (sizeof (struct destination));
+            first_destination = destination = malloc (sizeof (struct destination));
             prepareclient (mysql_server, destination);
         }
     } else {
@@ -283,7 +283,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
     bev_remote =
         bufferevent_socket_new (event_base, -1, BEV_OPT_CLOSE_ON_FREE);
 
-    if (!bev_remote) {
+    if (!bev_remote || !destination) {
         free_ms (bev_arg->ms);
         bev_arg->ms = NULL;
         bufferevent_free (bev);
