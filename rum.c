@@ -169,10 +169,13 @@ void
 logmsg (const char *fmt, ...)
 {
     va_list args;
-    FILE *fp;
+    static FILE *fp = NULL;
+    static ino_t inode = 0;
     char outstr[200];
     time_t t;
     struct tm *tmp;
+    struct stat statbuf;
+    int staterror = 0;
 
     t = time (NULL);
     tmp = localtime (&t);
@@ -181,7 +184,21 @@ logmsg (const char *fmt, ...)
         return;
     }
 
-    fp = fopen ("/var/log/rum.log", "a");
+    if (stat ("/var/log/rum.log", &statbuf) !=0 )
+    {
+        staterror=1;
+    }
+
+    if (!fp) {
+        fp = fopen ("/var/log/rum.log", "a");
+    } else {
+        if (inode != statbuf.st_ino || staterror) {
+            fclose(fp);
+            fp = fopen ("/var/log/rum.log", "a");
+            inode = statbuf.st_ino;
+        }
+    }
+
     if (!fp) {
         fprintf (stderr, "cannot open logfile\n");
         fflush (stderr);
@@ -203,7 +220,6 @@ logmsg (const char *fmt, ...)
     va_end (args);
 /*    fprintf(fp, " (open fds: %d)\n", get_num_fds()); */
     fflush (fp);
-    fclose (fp);
 }
 
 /* implementation of Donal Fellows method */
