@@ -6,16 +6,14 @@ struct destination *first_destination = NULL;
 struct event_base *event_base;
 
 extern char *mysql_cdb_file;
-char **argvptr;
-int *argcptr;
+char logstring[512];
 
 int
 main (int ac, char *av[])
 {
     int ret, ch, daemonize = 0;
     char *logfile = NULL;
-    argvptr = av;
-    argcptr = &ac;
+    int i;
 
     struct destination *destination;
     struct listener *listener;
@@ -29,6 +27,19 @@ main (int ac, char *av[])
     signal (SIGPIPE, SIG_IGN);
 
     char *mysqltype = NULL;
+
+    memset (logstring, '\0', sizeof(logstring));
+    for (i = 0; i < ac; i++) {
+        if (strlen(logstring)+strlen(av[i])>=sizeof(logstring)) {
+            break;
+        }
+        strcat(logstring, av[i]);
+
+        if (i != ac - 1) {
+            strcat(logstring, " ");
+        }
+    }
+
 
     if (ac == 1) {
         usage ();
@@ -159,7 +170,6 @@ logmsg (const char *fmt, ...)
     char outstr[200];
     time_t t;
     struct tm *tmp;
-    int i;
 
     t = time (NULL);
     tmp = localtime (&t);
@@ -183,16 +193,7 @@ logmsg (const char *fmt, ...)
 
     fprintf (fp, "%s ", outstr);
 
-    fprintf (fp, "[");
-    for (i = 0; i < *argcptr; i++) {
-        if (i == *argcptr - 1) {
-            fprintf (fp, "%s", argvptr[i]);
-        } else {
-            fprintf (fp, "%s ", argvptr[i]);
-        }
-    }
-    fprintf (fp, "] ");
-
+    fprintf (fp, "[%s] ", logstring);
 
     va_start (args, fmt);
     vfprintf (fp, fmt, args);

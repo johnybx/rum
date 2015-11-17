@@ -189,7 +189,8 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
                                 struct bufferevent *bev_remote)
 {
     char user[64];
-    int user_len;
+    char buf[512];
+    int user_len, buflen;
     struct bev_arg *bev_arg_remote;
     struct destination *destination = NULL, *dst;
     char *mysql_server = NULL, *c, *i, *userptr;
@@ -272,6 +273,22 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
          * but connection will not be successful, we need user encrypted password which should be in cdb file
          */
         destination = first_destination;
+
+        logmsg("user %s not found in cdb\n", user);
+        /* we reply access denied  */
+        memcpy (buf, ERR_LOGIN_PACKET_PREFIX, sizeof(ERR_LOGIN_PACKET_PREFIX));
+        buflen = snprintf (buf + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1, sizeof(buf) - sizeof(ERR_LOGIN_PACKET_PREFIX), "Access denied, unknown user '%s'", user);
+        buf[0] = buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 5;
+        bufferevent_write (bev, buf, buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1);
+
+        /* enable write_callback so we close connection in case client doesn't */
+        bufferevent_setcb (bev, mysql_read_callback, mysql_write_callback,
+                           mysql_event_callback, (void *) bev_arg);
+
+        if (mysql_server)
+            free (mysql_server);
+
+        return 1;
     }
 
     /* if remote connection exists free it */
