@@ -176,6 +176,9 @@ logmsg (const char *fmt, ...)
     struct tm *tmp;
     struct stat statbuf;
     int staterror = 0;
+    static char lastmsg[4096];
+    char tmpmsg[4096];
+    static int samemsg=0;
 
     t = time (NULL);
     tmp = localtime (&t);
@@ -205,14 +208,32 @@ logmsg (const char *fmt, ...)
         return;
     }
 
+    va_start (args, fmt);
+    vsnprintf (tmpmsg, sizeof(tmpmsg), fmt, args);
+    va_end (args);
+
+    if (!strcmp (lastmsg, tmpmsg)) {
+        samemsg++;
+        return;
+    } else {
+        strncpy(lastmsg, tmpmsg, sizeof(lastmsg));
+    }
+
     if (strftime (outstr, sizeof (outstr), "%Y-%m-%d %H:%M:%S", tmp) == 0) {
         fprintf (stderr, "strftime returned 0");
         fclose (fp);
         return;
     }
 
-    fprintf (fp, "%s ", outstr);
+    if (samemsg>0) {
+        fprintf (fp, "%s ", outstr);
+        fprintf (fp, "[%s] ", logstring);
+        fprintf (fp, "last message repeated %d times\n", samemsg);
+        samemsg=0;
+    }
 
+
+    fprintf (fp, "%s ", outstr);
     fprintf (fp, "[%s] ", logstring);
 
     va_start (args, fmt);
