@@ -28,6 +28,9 @@ main (int ac, char *av[])
 
     char *mysqltype = NULL;
 
+    setenv ("TZ", ":/etc/localtime", 0);
+    tzset ();
+
     memset (logstring, '\0', sizeof(logstring));
     for (i = 0; i < ac; i++) {
         if (strlen(logstring)+strlen(av[i])>=sizeof(logstring)) {
