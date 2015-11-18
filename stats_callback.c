@@ -47,6 +47,10 @@ send_stats_to_client (struct bufferevent *bev)
     int len;
     struct destination *destination = first_destination;
 
+    if (!destination) {
+        bufferevent_write (bev, "no stats", sizeof("no stats"));
+    }
+
     len =
         snprintf (tmp, STATS_BUF_SIZE,
                   "[%20s] [   %10s] [%20s] [%15s] [%18s]\n", "source", "bytes",
