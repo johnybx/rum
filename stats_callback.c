@@ -49,6 +49,7 @@ send_stats_to_client (struct bufferevent *bev)
 
     if (!destination) {
         bufferevent_write (bev, "no stats", sizeof("no stats"));
+        return;
     }
 
     len =

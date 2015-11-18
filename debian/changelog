@@ -1,3 +1,9 @@
+rum (3.5) precise; urgency=medium
+
+  * really fix segfault
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Wed, 18 Nov 2015 14:55:20 +0100
+
 rum (3.4) precise; urgency=medium
 
   * segfault fix connecting to stats port
