@@ -172,7 +172,7 @@ void
 usage ()
 {
     printf
-        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\n");
+        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\n");
     exit (-1);
 }
 
