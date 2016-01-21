@@ -3,6 +3,7 @@
 extern struct event_base *event_base;
 extern struct destination *first_destination;
 extern char *mysql_cdb_file;
+extern char *postgresql_cdb_file;
 
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
@@ -176,14 +177,20 @@ accept_connect (int sock, short event, void *arg)
 
     /* set callback functions and argument */
     if (listener->type == LISTENER_DEFAULT) {
-        if (!mysql_cdb_file) {
+        if (!mysql_cdb_file && !postgresql_cdb_file) {
             bufferevent_setcb (bev_client, read_callback, NULL, event_callback,
                                (void *) bev_arg_client);
-        } else {
+        } else if (mysql_cdb_file) {
             /* if mysql_cdb is enabled, use different callback functions */
             bev_arg_client->ms = init_ms ();
             bufferevent_setcb (bev_client, mysql_read_callback, NULL,
                                mysql_event_callback, (void *) bev_arg_client);
+        } else if (postgresql_cdb_file) {
+            /* if postgresql_cdb is enabled, use different callback functions */
+            bev_arg_client->ms = init_ms ();
+            bufferevent_setcb (bev_client, postgresql_read_callback, NULL,
+                               postgresql_event_callback, (void *) bev_arg_client);
+
         }
     } else if (listener->type == LISTENER_STATS) {
         bufferevent_setcb (bev_client, NULL, stats_write_callback,
@@ -212,15 +219,22 @@ accept_connect (int sock, short event, void *arg)
     bev_arg_target->read_timeout = 0;
 
 
-    if (!mysql_cdb_file) {
+    if (!mysql_cdb_file && !postgresql_cdb_file) {
         bufferevent_setcb (bev_target, read_callback, NULL, event_callback,
                            (void *) bev_arg_target);
-    } else {
+    } else if (mysql_cdb_file) {
         /* mysql_stuff structure is same for client and target bufferevent */
         bev_arg_target->ms = bev_arg_client->ms;
 
         bufferevent_setcb (bev_target, mysql_read_callback, NULL,
                            mysql_event_callback, (void *) bev_arg_target);
+    } else if (postgresql_cdb_file) {
+        /* mysql_stuff structure is same for client and target bufferevent */
+        bev_arg_target->ms = bev_arg_client->ms;
+
+        bufferevent_setcb (bev_target, postgresql_read_callback, NULL,
+                           postgresql_event_callback, (void *) bev_arg_target);
+
     }
     /* read buffer 64kb */
     bufferevent_setwatermark (bev_target, EV_READ, 0, INPUT_BUFFER_LIMIT);
@@ -228,7 +242,7 @@ accept_connect (int sock, short event, void *arg)
     /* we can use cached init packet only if we can use MITM attack,
      * we can use MITM attack only if we use mysql_cdb_file where are hashed user passwords
      */
-    if (!mysql_cdb_file || (mysql_cdb_file && !cache_mysql_init_packet)) {
+    if (!postgresql_cdb_file && (!mysql_cdb_file || (mysql_cdb_file && !cache_mysql_init_packet))) {
         if (destination->s[0] == SOCKET_TCP) {
             s = (struct sockaddr *) &destination->sin;
             len = destination->addrlen;
@@ -272,9 +286,13 @@ accept_connect (int sock, short event, void *arg)
         if (bev_arg_target->connect_timer) {
             event_add (bev_arg_target->connect_timer, &time);
         }
-
-
-
+    } else if (postgresql_cdb_file) {
+        bev_arg_client->remote = NULL;
+        bev_arg_client->ms->not_need_remote = 1;
+        bev_arg_client->ms->handshake = 1;
+        bufferevent_free (bev_target);
+        free (bev_arg_target);
+        bufferevent_enable (bev_client, EV_READ);
     } else {
         /* use cached init packet */
         bev_arg_client->remote = NULL;

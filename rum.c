@@ -6,6 +6,7 @@ struct destination *first_destination = NULL;
 struct event_base *event_base;
 
 extern char *mysql_cdb_file;
+extern char *postgresql_cdb_file;
 char logstring[512];
 
 int
@@ -57,7 +58,7 @@ main (int ac, char *av[])
 
     listener = NULL;
 
-    while ((ch = getopt (ac, av, "bd:s:m:l:M:t:")) != -1) {
+    while ((ch = getopt (ac, av, "bd:s:m:l:M:P:t:")) != -1) {
         switch (ch) {
         case 'b':
             daemonize = 1;
@@ -88,6 +89,11 @@ main (int ac, char *av[])
             /* enable mysql module */
             mysql_cdb_file = strdup (optarg);
             break;
+        case 'P':
+            /* enable mysql module */
+            postgresql_cdb_file = strdup (optarg);
+            break;
+
         case 'd':
             first_destination = destination =
                 malloc (sizeof (struct destination));
@@ -114,6 +120,11 @@ main (int ac, char *av[])
     if (mysql_cdb_file) {
         init_mysql_cdb_file (mysqltype);
     }
+
+    if (postgresql_cdb_file) {
+        init_postgresql_cdb_file (mysqltype);
+    }
+
 
     if (daemonize) {
         if (logfile) {

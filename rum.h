@@ -163,8 +163,22 @@ void cache_mysql_init_packet_event_callback (struct bufferevent *bev,
                                              short events, void *ptr);
 void mysql_connect_timeout_cb (evutil_socket_t fd, short what, void *arg);
 
+/* postgresql_callback.c */
+void postgresql_read_callback (struct bufferevent *bev, void *ptr);
+void postgresql_write_callback (struct bufferevent *bev, void *ptr);
+void postgresql_event_callback (struct bufferevent *bev, short callbacks,
+                           void *ptr);
+void postgresql_connect_timeout_cb (evutil_socket_t fd, short what, void *arg);
 
-/* mysql_mitm .c */
+/* postgresql_mitm.c */
+int pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
+                                    struct bufferevent *bev, int len,
+                                    struct bufferevent *bev_remote);
+int
+pg_handle_auth_with_server (struct bev_arg *bev_arg, struct bufferevent *bev,
+                         struct bufferevent *bev_remote);
+
+/* mysql_mitm.c */
 struct mysql_mitm *init_ms ();
 void free_ms (struct mysql_mitm *ms);
 char *get_scramble_from_init_packet (char *packet, size_t len);
@@ -183,6 +197,12 @@ void init_mysql_cdb_file ();
 void get_data_from_cdb (char *user, int user_len, char **mysql_server,
                         char **mysql_password);
 void reopen_cdb (int sig, short event, void *a);
+
+/* postgresql_cdb.h */
+void init_postgresql_cdb_file ();
+void get_data_from_cdb_postgresql (char *user, int user_len, char **postgresql_server);
+void reopen_cdb_postgresql (int sig, short event, void *a);
+
 
 /* stats.c */
 void stats_event_callback (struct bufferevent *bev, short callbacks,
