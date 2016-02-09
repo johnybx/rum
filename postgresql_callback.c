@@ -3,6 +3,9 @@
 extern struct event_base *event_base;
 extern struct destination *first_destination;
 
+extern int connect_timeout;
+extern int read_timeout;
+
 void
 postgresql_read_callback (struct bufferevent *bev, void *ptr)
 {
@@ -156,7 +159,7 @@ postgresql_event_callback (struct bufferevent *bev, short events, void *ptr)
 
             /* setup read timeout for connection from target server */
             struct timeval time;
-            time.tv_sec = READ_TIMEOUT;
+            time.tv_sec = read_timeout;
             time.tv_usec = 0;
             bufferevent_set_timeouts (bev, &time, NULL);
             bev_arg->read_timeout = 1;

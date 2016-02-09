@@ -8,8 +8,15 @@ extern char *postgresql_cdb_file;
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern char *cache_mysql_init_packet_scramble;
+extern int mode;
+
+struct destination *destination_rr = NULL;
 
 int logfd;
+
+extern int connect_timeout;
+extern int read_timeout;
+
 
 /*
  * create_listen_socket return O_NONBLOCK socket ready for accept()
@@ -136,8 +143,26 @@ accept_connect (int sock, short event, void *arg)
     struct bufferevent *bev_client, *bev_target;
     struct bev_arg *bev_arg_client, *bev_arg_target;
 
-    struct destination *destination = first_destination;
+    struct destination *destination=NULL;
     struct sockaddr *s = NULL;
+
+    if (mode == MODE_NORMAL) {
+        destination=first_destination;
+    } else if (mode == MODE_FAILOVER) {
+        /* use first but try second in case of fail */
+        destination = first_destination;
+    } else if (mode == MODE_FAILOVER_RR) {
+        /* use round-robin & set destination_rr to random */
+        if (destination_rr == NULL) {
+            destination = destination_rr = first_destination;
+        } else {
+            if (destination_rr->next) {
+                destination = destination_rr = destination_rr->next;
+            } else {
+                destination = destination_rr = first_destination;
+            }
+        }
+    }
 
     if (listener->s[0] == SOCKET_TCP) {
         len = sizeof (struct sockaddr_in);
@@ -253,6 +278,7 @@ accept_connect (int sock, short event, void *arg)
 
         bev_arg_target->connecting = 1;
         bev_arg_target->destination = destination;
+        bev_arg_target->failover_first_dst = destination;
 
         if (bufferevent_socket_connect (bev_target, s, len) == -1) {
             logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
@@ -278,7 +304,7 @@ accept_connect (int sock, short event, void *arg)
 
         /* connect timeout timer */
         struct timeval time;
-        time.tv_sec = CONNECT_TIMEOUT;
+        time.tv_sec = connect_timeout;
         time.tv_usec = 0;
 
         bev_arg_target->connect_timer =
@@ -378,7 +404,7 @@ cache_init_packet_from_server ()
 
     /* connect timeout timer */
     struct timeval time;
-    time.tv_sec = CONNECT_TIMEOUT;
+    time.tv_sec = connect_timeout;
     time.tv_usec = 0;
 
     bev_arg->connect_timer =
@@ -391,4 +417,107 @@ cache_init_packet_from_server ()
 void
 log_cb ()
 {
+}
+
+void failover(struct bev_arg *bev_arg_target) {
+    struct sockaddr *s = NULL;
+    socklen_t len;
+
+    struct destination *destination = NULL;
+    struct bufferevent *bev_client = bev_arg_target->remote->bev, *bev_target;
+    struct bev_arg *bev_arg_client = bev_arg_target->remote;
+
+    if (mode==MODE_FAILOVER) {
+        if (bev_arg_target->destination->next) {
+            destination = bev_arg_target->destination->next;
+        } else {
+            /* we tried all destinations */
+            logmsg ("we tried all destinations\n");
+            bev_arg_client->listener->nr_conn--;
+            bufferevent_free (bev_client);
+            free (bev_arg_client);
+            free (bev_arg_target);
+
+            return;
+        }
+    } else if (mode==MODE_FAILOVER_RR) {
+        if (destination_rr == NULL) {
+            destination = destination_rr = first_destination;
+        } else {
+            if (destination_rr->next) {
+                destination = destination_rr = destination_rr->next;
+            } else {
+                destination = destination_rr = first_destination;
+            }
+        }
+    }
+
+    if (destination == bev_arg_target->failover_first_dst) {
+        /* we tried all destinations */
+        logmsg ("we tried all destinations\n");
+        bev_arg_client->listener->nr_conn--;
+        bufferevent_free (bev_client);
+        free (bev_arg_client);
+        free (bev_arg_target);
+
+        return;
+    }
+
+    bev_arg_target->destination=destination;
+
+    bev_target =
+        bufferevent_socket_new (event_base, -1, BEV_OPT_CLOSE_ON_FREE);
+    bev_arg_target->bev = bev_target;
+
+    bufferevent_setcb (bev_target, read_callback, NULL, event_callback,
+                       (void *) bev_arg_target);
+
+
+    /* read buffer 64kb */
+    bufferevent_setwatermark (bev_target, EV_READ, 0, INPUT_BUFFER_LIMIT);
+
+    logmsg ("reconnect to %s\n", destination->s);
+    if (destination->s[0] == SOCKET_TCP) {
+        s = (struct sockaddr *) &destination->sin;
+        len = destination->addrlen;
+    } else {
+        s = (struct sockaddr *) &destination->sun;
+        len = destination->addrlen;
+    }
+
+
+    bev_arg_target->connecting = 1;
+    if (bufferevent_socket_connect (bev_target, s, len) == -1) {
+        logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
+        bev_arg_client->listener->nr_conn--;
+        bufferevent_free (bev_client);
+        bufferevent_free (bev_target);
+        free (bev_arg_client);
+        free (bev_arg_target);
+
+        return;
+    }
+    bev_arg_target->connecting = 0;
+
+    struct linger l;
+    int flag = 1;
+
+    l.l_onoff = 1;
+    l.l_linger = 0;
+
+    setsockopt (bufferevent_getfd (bev_target), SOL_SOCKET, SO_LINGER,
+                (void *) &l, sizeof (l));
+    setsockopt (bufferevent_getfd (bev_target), IPPROTO_TCP, TCP_NODELAY,
+                (char *) &flag, sizeof (int));
+
+    /* connect timeout timer */
+    struct timeval time;
+    time.tv_sec = connect_timeout;
+    time.tv_usec = 0;
+
+    bev_arg_target->connect_timer =
+        event_new (event_base, -1, 0, connect_timeout_cb, bev_arg_target);
+    if (bev_arg_target->connect_timer) {
+        event_add (bev_arg_target->connect_timer, &time);
+    }
 }

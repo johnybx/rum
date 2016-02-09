@@ -1,5 +1,11 @@
 #include "rum.h"
 
+extern struct event_base *event_base;
+extern int mode;
+
+extern int connect_timeout;
+extern int read_timeout;
+
 /*
  * if some data are in input buffer, copy it to remote bufferevent output buffer
  */
@@ -100,6 +106,7 @@ void
 event_callback (struct bufferevent *bev, short events, void *ptr)
 {
     struct bev_arg *bev_arg = ptr;
+//    struct bufferevent *bev_target;
 
     /* if remote socket exist */
     if (bev_arg->remote) {
@@ -117,7 +124,7 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
 
             /* setup read timeout for connection from target server */
             struct timeval time;
-            time.tv_sec = READ_TIMEOUT;
+            time.tv_sec = read_timeout;
             time.tv_usec = 0;
             bufferevent_set_timeouts (bev, &time, NULL);
             bev_arg->read_timeout = 1;
@@ -130,12 +137,14 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
                 } else if (events & BEV_EVENT_TIMEOUT) {
                     logmsg ("BEV_EVENT_TIMEOUT dest: %s\n", bev_arg->destination->s);
                 }
+
             }
 
             if (bev_arg->connect_timer) {
                 event_free (bev_arg->connect_timer);
                 bev_arg->connect_timer = NULL;
             }
+
             if (bev_arg->connecting) {
                 /* this code is called from another event function, return immediately and dont free anything 
                  * this is probably a bug in libevent, in evbuffer_socket_connect() when connect() fail event_callback is directly called
@@ -144,19 +153,14 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
             }
             bufferevent_free (bev);
 
-            /* if remote socket doesnt have any data in output buffer, free structures and close it */
-            if (evbuffer_get_length (bufferevent_get_output (bev_remote)) == 0) {
-                bufferevent_free (bev_remote);
-                free (bev_arg->remote);
+            /* failover */
+            if (bev_arg->type==BEV_TARGET && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR) && (events & (BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT))) {
+                if (bev_arg->connect_timer) {
+                    event_free (bev_arg->connect_timer);
+                    bev_arg->connect_timer = NULL;
+                }
 
-                bev_arg->listener->nr_conn--;
-            } else {
-                /* if remote socket has still some data in output buffer dont close it
-                 * but enable write_callback, it will free self when write all data
-                 */
-                bev_arg->remote->remote = NULL;
-                bufferevent_setcb (bev_remote, read_callback, write_callback,
-                                   event_callback, (void *) bev_arg->remote);
+                return failover(bev_arg);
             }
 
             free (bev_arg);
@@ -193,6 +197,12 @@ connect_timeout_cb (evutil_socket_t fd, short what, void *arg)
     if (bev_arg->connect_timer) {
         event_free (bev_arg->connect_timer);
         bev_arg->connect_timer = NULL;
+    }
+
+    /* failover */
+    if (bev_arg->type==BEV_TARGET && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR)) {
+        bufferevent_free(bev_arg->bev);
+        return failover(bev_arg);
     }
 
     if (bev_arg->remote) {

@@ -4,6 +4,9 @@ extern struct event_base *event_base;
 
 extern struct destination *first_destination;
 
+extern int connect_timeout;
+extern int read_timeout;
+
 int
 pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
                                 struct bufferevent *bev, int len,
@@ -223,7 +226,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
 
     /* connect timeout timer */
     struct timeval time;
-    time.tv_sec = CONNECT_TIMEOUT;
+    time.tv_sec = connect_timeout;
     time.tv_usec = 0;
 
     bev_arg_remote->connect_timer =

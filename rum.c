@@ -8,6 +8,10 @@ struct event_base *event_base;
 extern char *mysql_cdb_file;
 extern char *postgresql_cdb_file;
 char logstring[512];
+int mode = MODE_NORMAL;
+int destinations = 0;
+int connect_timeout = CONNECT_TIMEOUT;
+int read_timeout = READ_TIMEOUT;
 
 int
 main (int ac, char *av[])
@@ -15,8 +19,9 @@ main (int ac, char *av[])
     int ret, ch, daemonize = 0;
     char *logfile = NULL;
     int i;
+    char *tmp,*ptr;
 
-    struct destination *destination;
+    struct destination *destination = NULL;
     struct listener *listener;
 
     struct rlimit fdlimit;
@@ -58,7 +63,7 @@ main (int ac, char *av[])
 
     listener = NULL;
 
-    while ((ch = getopt (ac, av, "bd:s:m:l:M:P:t:")) != -1) {
+    while ((ch = getopt (ac, av, "bd:s:m:l:M:P:t:r:f:")) != -1) {
         switch (ch) {
         case 'b':
             daemonize = 1;
@@ -104,6 +109,45 @@ main (int ac, char *av[])
             break;
         case 't':
             mysqltype = optarg;
+            break;
+        case 'f':
+            mode=MODE_FAILOVER;
+            ptr=tmp=strdup(optarg);
+            i=0;
+            while(tmp[i]!='\0') {
+                if (tmp[i]==',') {
+                    tmp[i]='\0';
+                    add_destination(ptr);
+                    destinations++;
+                    ptr=tmp+i+1;
+                }
+                i++;
+            }
+
+            add_destination(ptr);
+            destinations++;
+            randomize_destinations();
+
+            break;
+
+        case 'r':
+            mode=MODE_FAILOVER_RR;
+            ptr=tmp=strdup(optarg);
+            i=0;
+            while(tmp[i]!='\0') {
+                if (tmp[i]==',') {
+                    tmp[i]='\0';
+                    add_destination(ptr);
+                    destinations++;
+                    ptr=tmp+i+1;
+                }
+                i++;
+            }
+
+            add_destination(ptr);
+            destinations++;
+            randomize_destinations();
+
             break;
         }
     }
@@ -172,7 +216,7 @@ void
 usage ()
 {
     printf
-        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\n");
+        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-r dst1:port1,dst2:port2,dst3:port3,... - randomize list of targets and failover if cannot connect or timeout\n\t-f dst1:port1,dst2:port2,dst3:port3,... - like -r but always start with dst1 as target and dont randomize\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\n");
     exit (-1);
 }
 
@@ -271,4 +315,66 @@ get_num_fds ()
     }
     closedir (dir);
     return fd_count;
+}
+
+void add_destination (char *ptr)
+{
+    struct destination *destination = NULL, *dst;
+
+    if (first_destination) {
+        for (dst = first_destination; dst->next; dst = dst->next) {
+            if (!strcmp (dst->s, ptr)) {
+                destination = dst;
+                break;
+            }
+        }
+
+        if (!destination) {
+            dst->next = destination = malloc (sizeof (struct destination));
+            prepareclient (ptr, destination);
+        }
+    } else {
+        first_destination = destination = malloc (sizeof (struct destination));
+        prepareclient (ptr, destination);
+    }
+
+    return;
+}
+
+void randomize_destinations ()
+{
+    struct destination *array[destinations], *dst;
+    int i;
+
+    for (i = 0, dst = first_destination ; i < destinations ; i++) {
+        array[i]=dst;
+        dst=dst->next;
+    }
+
+    shuffle(array, destinations);
+
+
+    dst = first_destination = array[0];
+    for (i = 1 ; i < destinations ; i++) {
+        dst->next=array[i];
+        dst=dst->next;
+    }
+
+    dst->next=NULL;
+}
+
+void shuffle(struct destination **array, size_t n)
+{
+    srand(time(NULL));
+    if (n > 1)
+    {
+        size_t i;
+        for (i = 0; i < n - 1; i++)
+        {
+          size_t j = i + rand() / (RAND_MAX / (n - i) + 1);
+          struct destination *t = array[j];
+          array[j] = array[i];
+          array[i] = t;
+        }
+    }
 }

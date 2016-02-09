@@ -11,6 +11,9 @@ extern int cache_mysql_init_packet_len;
 
 extern struct destination *first_destination;
 
+extern int connect_timeout;
+extern int read_timeout;
+
 /* initialize struct mysql_mitm */
 struct mysql_mitm *
 init_ms ()
@@ -382,7 +385,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
     /* connect timeout timer */
     struct timeval time;
-    time.tv_sec = CONNECT_TIMEOUT;
+    time.tv_sec = connect_timeout;
     time.tv_usec = 0;
 
     bev_arg_remote->connect_timer =

@@ -7,6 +7,9 @@ char *cache_mysql_init_packet = NULL;
 int cache_mysql_init_packet_len;
 char *cache_mysql_init_packet_scramble;
 
+extern int connect_timeout;
+extern int read_timeout;
+
 void
 mysql_read_callback (struct bufferevent *bev, void *ptr)
 {
@@ -172,7 +175,7 @@ mysql_event_callback (struct bufferevent *bev, short events, void *ptr)
 
             /* setup read timeout for connection from target server */
             struct timeval time;
-            time.tv_sec = READ_TIMEOUT;
+            time.tv_sec = read_timeout;
             time.tv_usec = 0;
             bufferevent_set_timeouts (bev, &time, NULL);
             bev_arg->read_timeout = 1;

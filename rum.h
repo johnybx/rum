@@ -50,6 +50,10 @@
 #define SOCKET_TCP 't'
 #define SOCKET_UNIX 's'
 
+#define MODE_NORMAL 0 /* -d tcp:... */
+#define MODE_FAILOVER 1 /* -f tcp:...,tcp:... */
+#define MODE_FAILOVER_RR 2 /* -r tcp:...,tcp:... */
+
 struct listener
 {
     int fd;                     /* listening socket */
@@ -89,6 +93,7 @@ struct bev_arg
     struct bufferevent *bev;    /* bufferevent with input/output evbuffer a 1 associated socket fd */
     struct bev_arg *remote;     /* bev_arg ptr to remote socket bev_arg */
     struct listener *listener;  /* used for statistics */
+    struct destination *failover_first_dst;
 
     /* client or destination */
     char type;
@@ -133,12 +138,16 @@ struct mysql_mitm
 void usage ();
 void logmsg (const char *fmt, ...);
 int get_num_fds ();
+void add_destination (char *ptr);
+void randomize_destinations (void);
+void shuffle(struct destination **array, size_t n);
 
 /* socket.c */
 int create_listen_socket (char *wwtf);
 void accept_connect (int fd, short event, void *arg);
 void prepareclient (char *wwtf, struct destination *destination);
 void cache_init_packet_from_server ();
+void failover(struct bev_arg *bev_target);
 
 /* parse_arg.c */
 void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
