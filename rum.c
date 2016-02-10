@@ -13,6 +13,17 @@ int destinations = 0;
 int connect_timeout = CONNECT_TIMEOUT;
 int read_timeout = READ_TIMEOUT;
 
+int client_keepalive = 0;
+int client_keepcnt = 0;
+int client_keepidle = 0;
+int client_keepintvl = 0;
+
+int server_keepalive = 0;
+int server_keepcnt = 0;
+int server_keepidle = 0;
+int server_keepintvl = 0;
+
+
 int
 main (int ac, char *av[])
 {
@@ -78,6 +89,14 @@ main (int ac, char *av[])
         {"failover-rr",   required_argument, 0,  'r' },
         {"read-timeout",   required_argument, &read_timeout,  0 },
         {"connect-timeout",   required_argument, &connect_timeout,  0 },
+        {"client-keepalive",   no_argument, &client_keepalive,  0 },
+        {"client-keepcnt",   required_argument, &client_keepcnt,  0 },
+        {"client-keepidle",   required_argument, &client_keepidle,  0 },
+        {"client-keepintvl",   required_argument, &client_keepintvl,  0 },
+        {"server-keepalive",   no_argument, &server_keepalive,  0 },
+        {"server-keepcnt",   required_argument, &server_keepcnt,  0 },
+        {"server-keepidle",   required_argument, &server_keepidle,  0 },
+        {"server-keepintvl",   required_argument, &server_keepintvl,  0 },
         {0,         0,                 0,  0 }
     };
 

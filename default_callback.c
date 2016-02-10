@@ -118,6 +118,7 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
                 event_free (bev_arg->connect_timer);
                 bev_arg->connect_timer = NULL;
             }
+            bev_arg->connected=1;
 
             bufferevent_enable (bev, EV_READ);
             bufferevent_enable (bev_remote, EV_READ);
@@ -156,13 +157,28 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
             bufferevent_free (bev);
 
             /* failover */
-            if (bev_arg->type==BEV_TARGET && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR || mode == MODE_FAILOVER_R) && (events & (BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT))) {
+            if (bev_arg->type==BEV_TARGET && !bev_arg->connected && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR || mode == MODE_FAILOVER_R) && (events & (BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT))) {
                 if (bev_arg->connect_timer) {
                     event_free (bev_arg->connect_timer);
                     bev_arg->connect_timer = NULL;
                 }
 
                 return failover(bev_arg);
+            }
+
+            /* if remote socket doesnt have any data in output buffer, free structures and close it */
+            if (evbuffer_get_length (bufferevent_get_output (bev_remote)) == 0) {
+                bufferevent_free (bev_remote);
+                free (bev_arg->remote);
+
+                bev_arg->listener->nr_conn--;
+            } else {
+                /* if remote socket has still some data in output buffer dont close it
+                 * but enable write_callback, it will free self when write all data
+                 */
+                bev_arg->remote->remote = NULL;
+                bufferevent_setcb (bev_remote, read_callback, write_callback,
+                                   event_callback, (void *) bev_arg->remote);
             }
 
             free (bev_arg);

@@ -196,6 +196,7 @@ accept_connect (int sock, short event, void *arg)
     bev_arg_client->listener = listener;
     bev_arg_client->bev = bev_client;
     bev_arg_client->connecting = 0;
+    bev_arg_client->connected = 0;
     bev_arg_client->connect_timer = NULL;
     bev_arg_client->read_timeout = 0;
     bev_arg_client->destination = NULL;
@@ -232,6 +233,7 @@ accept_connect (int sock, short event, void *arg)
     bev_arg_target = malloc (sizeof (struct bev_arg));
     bev_arg_target->type = BEV_TARGET;
     bev_arg_target->connecting = 0;
+    bev_arg_target->connected = 0;
 
     bev_arg_client->remote = bev_arg_target;
 

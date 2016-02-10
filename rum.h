@@ -109,6 +109,8 @@ struct bev_arg
 
     /* used as workaround for bug in bufferevent_socket_connect() */
     char connecting;
+    /* check if we need to failover or not */
+    char connected;
     struct event *connect_timer;
     short read_timeout;
     struct destination *destination;
