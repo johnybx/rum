@@ -123,11 +123,13 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
             bufferevent_enable (bev_remote, EV_READ);
 
             /* setup read timeout for connection from target server */
-            struct timeval time;
-            time.tv_sec = read_timeout;
-            time.tv_usec = 0;
-            bufferevent_set_timeouts (bev, &time, NULL);
-            bev_arg->read_timeout = 1;
+            if (read_timeout) {
+                struct timeval time;
+                time.tv_sec = read_timeout;
+                time.tv_usec = 0;
+                bufferevent_set_timeouts (bev, &time, NULL);
+                bev_arg->read_timeout = 1;
+            }
             /* error or eof */
         } else if (events &
                    (BEV_EVENT_ERROR | BEV_EVENT_EOF | BEV_EVENT_TIMEOUT)) {
@@ -154,7 +156,7 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
             bufferevent_free (bev);
 
             /* failover */
-            if (bev_arg->type==BEV_TARGET && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR) && (events & (BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT))) {
+            if (bev_arg->type==BEV_TARGET && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR || mode == MODE_FAILOVER_R) && (events & (BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT))) {
                 if (bev_arg->connect_timer) {
                     event_free (bev_arg->connect_timer);
                     bev_arg->connect_timer = NULL;
@@ -200,7 +202,7 @@ connect_timeout_cb (evutil_socket_t fd, short what, void *arg)
     }
 
     /* failover */
-    if (bev_arg->type==BEV_TARGET && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR)) {
+    if (bev_arg->type==BEV_TARGET && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR || mode == MODE_FAILOVER_R)) {
         bufferevent_free(bev_arg->bev);
         return failover(bev_arg);
     }

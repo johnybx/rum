@@ -148,7 +148,7 @@ accept_connect (int sock, short event, void *arg)
 
     if (mode == MODE_NORMAL) {
         destination=first_destination;
-    } else if (mode == MODE_FAILOVER) {
+    } else if (mode == MODE_FAILOVER || mode == MODE_FAILOVER_R) {
         /* use first but try second in case of fail */
         destination = first_destination;
     } else if (mode == MODE_FAILOVER_RR) {
@@ -427,7 +427,7 @@ void failover(struct bev_arg *bev_arg_target) {
     struct bufferevent *bev_client = bev_arg_target->remote->bev, *bev_target;
     struct bev_arg *bev_arg_client = bev_arg_target->remote;
 
-    if (mode==MODE_FAILOVER) {
+    if (mode==MODE_FAILOVER || mode==MODE_FAILOVER_R) {
         if (bev_arg_target->destination->next) {
             destination = bev_arg_target->destination->next;
         } else {

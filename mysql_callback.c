@@ -174,11 +174,13 @@ mysql_event_callback (struct bufferevent *bev, short events, void *ptr)
                 bufferevent_enable (bev_remote, EV_READ);
 
             /* setup read timeout for connection from target server */
-            struct timeval time;
-            time.tv_sec = read_timeout;
-            time.tv_usec = 0;
-            bufferevent_set_timeouts (bev, &time, NULL);
-            bev_arg->read_timeout = 1;
+            if (read_timeout) {
+                struct timeval time;
+                time.tv_sec = read_timeout;
+                time.tv_usec = 0;
+                bufferevent_set_timeouts (bev, &time, NULL);
+                bev_arg->read_timeout = 1;
+            }
 
             /* error or eof */
         } else if (events &

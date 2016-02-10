@@ -20,6 +20,7 @@
 #include <string.h>
 #include <time.h>
 #include <dirent.h>
+#include <getopt.h>
 
 #include "event2/event.h"
 #include "event2/bufferevent.h"
@@ -37,8 +38,8 @@
 #define INPUT_BUFFER_LIMIT 65535
 #define OUTPUT_BUFFER_LIMIT 65535
 
-#define CONNECT_TIMEOUT 3
-#define READ_TIMEOUT 3          /* only for first data from server, if mysql is stuck and dont send any data within READ_TIMEOUT we drop connection */
+#define CONNECT_TIMEOUT 6
+#define READ_TIMEOUT 6          /* only for first data from server, if mysql is stuck and dont send any data within READ_TIMEOUT we drop connection */
 
 /* cdb file is reopened every 2 seconds */
 #define CDB_RELOAD_TIME 2
@@ -53,6 +54,7 @@
 #define MODE_NORMAL 0 /* -d tcp:... */
 #define MODE_FAILOVER 1 /* -f tcp:...,tcp:... */
 #define MODE_FAILOVER_RR 2 /* -r tcp:...,tcp:... */
+#define MODE_FAILOVER_R 3 /* -R tcp:...,tcp:... */
 
 struct listener
 {
