@@ -1,3 +1,11 @@
+rum (3.6) precise; urgency=medium
+
+  * postgresql support
+  * failover support
+  * tcp_keepalive support
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Thu, 11 Feb 2016 13:24:37 +0100
+
 rum (3.5) precise; urgency=medium
 
   * really fix segfault
