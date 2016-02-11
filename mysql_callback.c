@@ -10,6 +10,17 @@ char *cache_mysql_init_packet_scramble;
 extern int connect_timeout;
 extern int read_timeout;
 
+extern int client_keepalive;
+extern int client_keepcnt;
+extern int client_keepidle;
+extern int client_keepintvl;
+
+extern int server_keepalive;
+extern int server_keepcnt;
+extern int server_keepidle;
+extern int server_keepintvl;
+
+
 void
 mysql_read_callback (struct bufferevent *bev, void *ptr)
 {
@@ -168,6 +179,21 @@ mysql_event_callback (struct bufferevent *bev, short events, void *ptr)
                 event_free (bev_arg->connect_timer);
                 bev_arg->connect_timer = NULL;
             }
+
+            if (server_keepalive) {
+                setsockopt(bufferevent_getfd(bev), SOL_SOCKET, SO_KEEPALIVE, &server_keepalive, sizeof(server_keepalive));
+
+                if (server_keepcnt) {
+                    setsockopt(bufferevent_getfd(bev), SOL_TCP, TCP_KEEPCNT, &server_keepcnt, sizeof(server_keepcnt));
+                }
+                if (server_keepidle) {
+                    setsockopt(bufferevent_getfd(bev), SOL_TCP, TCP_KEEPIDLE, &server_keepidle, sizeof(server_keepidle));
+                }
+                if (server_keepintvl) {
+                    setsockopt(bufferevent_getfd(bev), SOL_TCP, TCP_KEEPINTVL, &server_keepintvl, sizeof(server_keepintvl));
+                }
+            }
+
 
             bufferevent_enable (bev, EV_READ);
             if (bev_remote)

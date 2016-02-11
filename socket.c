@@ -17,6 +17,15 @@ int logfd;
 extern int connect_timeout;
 extern int read_timeout;
 
+extern int client_keepalive;
+extern int client_keepcnt;
+extern int client_keepidle;
+extern int client_keepintvl;
+
+extern int server_keepalive;
+extern int server_keepcnt;
+extern int server_keepidle;
+extern int server_keepintvl;
 
 /*
  * create_listen_socket return O_NONBLOCK socket ready for accept()
@@ -176,6 +185,20 @@ accept_connect (int sock, short event, void *arg)
 
     if (csock == -1) {
         return;
+    }
+
+    if (client_keepalive) {
+        setsockopt(csock, SOL_SOCKET, SO_KEEPALIVE, &client_keepalive, sizeof(client_keepalive));
+
+        if (client_keepcnt) {
+            setsockopt(csock, SOL_TCP, TCP_KEEPCNT, &client_keepcnt, sizeof(client_keepcnt));
+        }
+        if (client_keepidle) {
+            setsockopt(csock, SOL_TCP, TCP_KEEPIDLE, &client_keepidle, sizeof(client_keepidle));
+        }
+        if (client_keepintvl) {
+            setsockopt(csock, SOL_TCP, TCP_KEEPINTVL, &client_keepintvl, sizeof(client_keepintvl));
+        }
     }
 
     listener->nr_allconn++;
