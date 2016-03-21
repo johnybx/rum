@@ -57,7 +57,7 @@ get_data_from_cdb_postgresql (char *user, int user_len, char **postgresql_server
 
     result = cdb_read (&postgresql_cdb, tmp, dlen, dpos);
 
-    *postgresql_server = strdup (tmp);
+    *postgresql_server = strdup (tmp+1);
 
     return;
 }
