@@ -16,13 +16,6 @@ init_mysql_cdb_file (char *type)
 {
     struct timeval tv;
 
-    if ((cdb_fd = open (mysql_cdb_file, O_RDONLY)) == -1) {
-        perror ("open(mysql_cdb_file, O_ORDONLY)");
-        exit (-1);
-    } else {
-        cdb_init (&cdb, cdb_fd);
-    }
-
     ev_signal = event_new (event_base, SIGUSR1, EV_SIGNAL, reopen_cdb, NULL);
     tv.tv_usec = 0;
     tv.tv_sec = CDB_RELOAD_TIME;
@@ -67,6 +60,16 @@ init_mysql_cdb_file (char *type)
             exit (-1);
         }
     }
+
+    if ((cdb_fd = open (mysql_cdb_file, O_RDONLY)) == -1) {
+        //perror ("open(mysql_cdb_file, O_ORDONLY)");
+        //exit (-1);
+	return;
+    } else {
+        cdb_init (&cdb, cdb_fd);
+    }
+
+
 
 }
 

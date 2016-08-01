@@ -12,17 +12,18 @@ init_postgresql_cdb_file (char *type)
 {
     struct timeval tv;
 
-    if ((postgresql_cdb_fd = open (postgresql_cdb_file, O_RDONLY)) == -1) {
-        perror ("open(postgresql_cdb_file, O_ORDONLY)");
-        exit (-1);
-    } else {
-        cdb_init (&postgresql_cdb, postgresql_cdb_fd);
-    }
-
     postgresql_ev_signal = event_new (event_base, SIGUSR1, EV_SIGNAL, reopen_cdb_postgresql, NULL);
     tv.tv_usec = 0;
     tv.tv_sec = CDB_RELOAD_TIME;
     event_add (postgresql_ev_signal, &tv);
+
+    if ((postgresql_cdb_fd = open (postgresql_cdb_file, O_RDONLY)) == -1) {
+    	return;
+    } else {
+        cdb_init (&postgresql_cdb, postgresql_cdb_fd);
+    }
+
+
 }
 
 

@@ -1,3 +1,21 @@
+rum (3.9-xenial) xenial; urgency=medium
+
+  * do not fail when cdb file not yet exists
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Mon, 01 Aug 2016 13:47:47 +0200
+
+rum (3.8-xenial) xenial; urgency=medium
+
+  * create /var/run/postgresql in init script
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Fri, 22 Jul 2016 15:34:56 +0200
+
+rum (3.7-xenial) xenial; urgency=medium
+
+  * xenial rebuild
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Fri, 20 May 2016 15:23:45 +0200
+
 rum (3.6) precise; urgency=medium
 
   * postgresql support
