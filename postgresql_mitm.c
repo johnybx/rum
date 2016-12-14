@@ -72,10 +72,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     userptr =
         bev_arg->ms->client_auth_packet + 2 * sizeof(int) +
         sizeof("user");
-    user_len = strlen (userptr);
-    if (user_len > sizeof (user)) {
-        user_len = sizeof (user);
-    }
+    user_len = strnlen (userptr, sizeof(user) - 1);
     strncpy (user,
              bev_arg->ms->client_auth_packet + 2 * sizeof(int) +
              sizeof("user"), user_len);

@@ -226,10 +226,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
     userptr =
         bev_arg->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS;
-    user_len = strlen (userptr);
-    if (user_len > sizeof (user)) {
-        user_len = sizeof (user);
-    }
+    user_len = strnlen (userptr, sizeof(user) - 1);
     strncpy (user,
              bev_arg->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
              MYSQL_AUTH_PACKET_USER_POS, user_len);
