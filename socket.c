@@ -364,9 +364,7 @@ accept_connect (int sock, short event, void *arg)
              cache_mysql_init_packet_len) == -1) {
             listener->nr_conn--;
             bufferevent_free (bev_client);
-            bufferevent_free (bev_target);
             free (bev_arg_client);
-            free (bev_arg_target);
         }
 
         bufferevent_enable (bev_client, EV_READ);
