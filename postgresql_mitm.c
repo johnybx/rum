@@ -72,7 +72,24 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     userptr =
         bev_arg->ms->client_auth_packet + 2 * sizeof(int) +
         sizeof("user");
-    user_len = strnlen (userptr, sizeof(user) - 1);
+    user_len = strnlen (userptr, len - 2*sizeof(int) - sizeof("user"));
+    if (user_len > sizeof(user)-1) {
+        bev_arg->listener->nr_conn--;
+
+        free_ms (bev_arg->ms);
+        bev_arg->ms = NULL;
+
+        if (bev_arg->remote) {
+            bev_arg->remote->ms = NULL;
+            bufferevent_free (bev_arg->remote->bev);
+            free (bev_arg->remote);
+        }
+
+        bufferevent_free (bev);
+        free (bev_arg);
+
+        return 1;
+    }
     strncpy (user,
              bev_arg->ms->client_auth_packet + 2 * sizeof(int) +
              sizeof("user"), user_len);
