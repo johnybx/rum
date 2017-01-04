@@ -198,6 +198,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
     struct destination *destination = NULL, *dst;
     char *mysql_server = NULL, *c, *i, *userptr;
 
+    /* check if size ends in user[1], so user has at least 1 char */
     if (len < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1) {
         bev_arg->listener->nr_conn--;
 
@@ -226,13 +227,58 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
     userptr =
         bev_arg->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS;
-    user_len = strnlen (userptr, sizeof(user) - 1);
+    /* limit strnlen to packet length without HEADER */
+    user_len = strnlen (userptr, len - MYSQL_PACKET_HEADER_SIZE - MYSQL_AUTH_PACKET_USER_POS);
+    if (user_len > sizeof(user)-1) {
+        bev_arg->listener->nr_conn--;
+
+        free_ms (bev_arg->ms);
+        bev_arg->ms = NULL;
+
+        if (bev_arg->remote) {
+            bev_arg->remote->ms = NULL;
+            bufferevent_free (bev_arg->remote->bev);
+            free (bev_arg->remote);
+        }
+
+        bufferevent_free (bev);
+        free (bev_arg);
+
+        return 1;
+
+    }
     strncpy (user,
              bev_arg->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
              MYSQL_AUTH_PACKET_USER_POS, user_len);
     user[user_len] = '\0';
 
     get_data_from_cdb (user, user_len, &mysql_server, &bev_arg->ms->password);
+
+    /* another size check if we know user_len, there must be at least 21 bytes after username
+    * 1 byte length
+    * 20 bytes scramble data
+    * https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
+    * https://dev.mysql.com/doc/internals/en/secure-password-authentication.html
+    *
+    * we dont support other types of auth
+    */
+    if (len < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1 + user_len + 1 + SCRAMBLE_LENGTH) {
+        bev_arg->listener->nr_conn--;
+
+        free_ms (bev_arg->ms);
+        bev_arg->ms = NULL;
+
+        if (bev_arg->remote) {
+            bev_arg->remote->ms = NULL;
+            bufferevent_free (bev_arg->remote->bev);
+            free (bev_arg->remote);
+        }
+
+        bufferevent_free (bev);
+        free (bev_arg);
+
+        return 1;
+    }
 
     i = bev_arg->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS + user_len + 1;
