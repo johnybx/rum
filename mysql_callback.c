@@ -218,9 +218,15 @@ mysql_event_callback (struct bufferevent *bev, short events, void *ptr)
                     logmsg ("BEV_EVENT_TIMEOUT dest: %s\n", bev_arg->destination->s);
                 }
             }
+
             if (bev_arg->connect_timer) {
                 event_free (bev_arg->connect_timer);
                 bev_arg->connect_timer = NULL;
+            }
+
+            if (bev_arg->remote && bev_arg->remote->connect_timer) {
+                event_free (bev_arg->remote->connect_timer);
+                bev_arg->remote->connect_timer = NULL;
             }
 
             if (bev_arg->connecting) {
