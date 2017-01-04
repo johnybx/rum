@@ -52,7 +52,6 @@ create_listen_socket (char *arg)
      */
     parse_arg (arg_copy, &type, &sin, &sun, &socklen, &port, &host_str,
                &port_str, &sockfile_str, 1);
-    free (arg_copy);
 
     if (type == SOCKET_TCP) {
         s = (struct sockaddr *) &sin;
@@ -114,6 +113,8 @@ create_listen_socket (char *arg)
         usage ();
         _exit (-1);
     }
+
+    free (arg_copy);
 
     return sock;
 }
