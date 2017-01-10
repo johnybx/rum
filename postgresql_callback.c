@@ -197,9 +197,9 @@ postgresql_event_callback (struct bufferevent *bev, short events, void *ptr)
                    (BEV_EVENT_ERROR | BEV_EVENT_EOF | BEV_EVENT_TIMEOUT)) {
             if (bev_arg->type == BEV_TARGET) {
                 if (events & BEV_EVENT_ERROR) {
-                    logmsg ("(postgresql_event_callback) BEV_EVENT_ERROR dest: %s\n", bev_arg->destination->s);
+                    logmsg ("BEV_EVENT_ERROR (postgresql_callback) dest: %s error: %s\n", bev_arg->destination->s, evutil_socket_error_to_string(evutil_socket_geterror(bufferevent_getfd(bev))));
                 } else if (events & BEV_EVENT_TIMEOUT) {
-                    logmsg ("(postgresql_event_callback) BEV_EVENT_TIMEOUT dest: %s\n", bev_arg->destination->s);
+                    logmsg ("BEV_EVENT_TIMEOUT (postgresql_callback) dest: %s\n", bev_arg->destination->s);
                 }
             }
             if (bev_arg->connect_timer) {
