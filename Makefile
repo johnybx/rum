@@ -17,7 +17,7 @@ rum: rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o st
 ${LIBEVENT_DIR}/.libs/libevent.a:
 	-$(shell echo 'compiling libevent, wait' >&2)
 	-$(shell echo 'cd $(LIBEVENT_DIR); CFLAGS="-O2" ./configure --disable-shared --enable-static --disable-openssl --disable-debug-mode; make clean; make' >&2)
-	-$(shell cd $(LIBEVENT_DIR); CFLAGS="-O2" ./configure --disable-shared --enable-static; make clean; make)
+	-$(shell cd $(LIBEVENT_DIR); CFLAGS="-O2" ./configure --disable-shared --enable-static --disable-openssl --disable-debug-mode; make clean; make)
 
 .PHONY : clean cleanlibevent
 
