@@ -2249,6 +2249,7 @@ evbuffer_read_setup_vecs_(struct evbuffer *buf, ev_ssize_t howmuch,
 static int
 get_n_bytes_readable_on_socket(evutil_socket_t fd)
 {
+#undef FIONREAD
 #if defined(FIONREAD) && defined(_WIN32)
 	unsigned long lng = EVBUFFER_MAX_READ;
 	if (ioctlsocket(fd, FIONREAD, &lng) < 0)
