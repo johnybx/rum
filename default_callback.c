@@ -47,8 +47,7 @@ read_callback (struct bufferevent *bev, void *ptr)
         }
 
         /* write data from our intput buffer to remote output buffer */
-        //if (bufferevent_read_buffer(bev, bufferevent_get_output(bev_remote))==-1) {
-        if (bufferevent_write_buffer (bev_remote, bufferevent_get_input (bev))
+        if (evbuffer_remove_buffer (bufferevent_get_input(bev), bufferevent_get_output(bev_remote), len)
             == -1) {
             /* if error, close our socket, remote socket and free everything */
             bev_arg->listener->nr_conn--;

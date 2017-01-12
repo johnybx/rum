@@ -241,6 +241,7 @@ main (int ac, char *av[])
     }
 
     event_base = event_base_new ();
+//    event_enable_debug_logging(EVENT_DBG_ALL);
 
     /* if mysql module is enabled, open cdb file and create EV_SIGNAL event which call repoen_cdb().
      * if someone send SIGUSR1 cdb file is reopened, but this is automatically triggered by timeout with
