@@ -11,7 +11,6 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
 {
     if (strstr (arg, "tcp:") == arg) {
         char *tmp;
-        struct hostent *h;
 
         *type = SOCKET_TCP;
 
@@ -26,17 +25,9 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
             usage ();
         }
 
-        if ((h = gethostbyname (*host_str)) == NULL) {
-            /* TODO prerobit tak aby vypisal iba warning a skoncil ked nebude existovat ziaden listener  */
-            herror ("gethostbyname");
-            fflush (stdout);
-            fflush (stderr);
-            _exit (-1);
-        }
         *port = (uint16_t) atoi ((const char *) *port_str);
-
         memset (sin, 0, sizeof (struct sockaddr_in));
-        memcpy (&sin->sin_addr, h->h_addr_list[0], sizeof (in_addr_t));
+        sin->sin_addr.s_addr = inet_addr(*host_str);
         sin->sin_port = htons (*port);
         sin->sin_family = AF_INET;
 
