@@ -151,6 +151,7 @@ accept_connect (int sock, short event, void *arg)
     struct sockaddr_in sin;
     struct sockaddr_un sun;
     int csock = 0;
+    int flag = 1;
     struct bufferevent *bev_client, *bev_target;
     struct bev_arg *bev_arg_client, *bev_arg_target;
 
@@ -184,6 +185,9 @@ accept_connect (int sock, short event, void *arg)
     }
 
     csock = accept4 (sock, s, &len, SOCK_NONBLOCK);
+    if (listener->s[0] == SOCKET_TCP) {
+        setsockopt (csock, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof (int));
+    }
 
     if (csock == -1) {
         return;
