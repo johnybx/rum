@@ -120,7 +120,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
          */
         destination = first_destination;
 
-        logmsg("user %s not found in cdb\n", user);
+        logmsg("user %s not found in cdb", user);
         /* we reply access denied  */
         //memcpy (buf, ERR_LOGIN_PACKET_PREFIX, sizeof(ERR_LOGIN_PACKET_PREFIX));
 
@@ -200,7 +200,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     if (bufferevent_socket_connect
         (bev_remote, (struct sockaddr *) &destination->sin,
          destination->addrlen) == -1) {
-        logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
+        logmsg ("bufferevent_socket_connect return -1 (full fd?)");
         /* this if is needed here, because if connect() fails libevent will call mysql_event_callback
          * immediately, and not from main event loop. so bev_arg->ms can be already freed
          */

@@ -214,6 +214,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
         bufferevent_free (bev);
         free (bev_arg);
 
+        logmsg("invalid client packet size (packet too small)");
         return 1;
     }
 
@@ -243,6 +244,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
         bufferevent_free (bev);
         free (bev_arg);
+        logmsg("invalid client packet size (user_len > sizeof(user)-1)");
 
         return 1;
 
@@ -276,6 +278,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
         bufferevent_free (bev);
         free (bev_arg);
+        logmsg("invalid client packet size (packet too small 2)");
 
         return 1;
     }
@@ -320,7 +323,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
          */
         destination = first_destination;
 
-        logmsg("user %s not found in cdb\n", user);
+        logmsg("user %s not found in cdb", user);
         /* we reply access denied  */
         memcpy (buf, ERR_LOGIN_PACKET_PREFIX, sizeof(ERR_LOGIN_PACKET_PREFIX));
         buflen = snprintf (buf + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1, sizeof(buf) - sizeof(ERR_LOGIN_PACKET_PREFIX), "Access denied, unknown user '%s'", user);
@@ -389,7 +392,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
     if (bufferevent_socket_connect
         (bev_remote, (struct sockaddr *) &destination->sin,
          destination->addrlen) == -1) {
-        logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
+        logmsg ("bufferevent_socket_connect return -1 (full fd?)");
         /* this if is needed here, because if connect() fails libevent will call mysql_event_callback
          * immediately, and not from main event loop. so bev_arg->ms can be already freed
          */

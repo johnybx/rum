@@ -160,9 +160,9 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
                    (BEV_EVENT_ERROR | BEV_EVENT_EOF | BEV_EVENT_TIMEOUT)) {
             if (bev_arg->type == BEV_TARGET) {
                 if (events & BEV_EVENT_ERROR) {
-                    logmsg ("BEV_EVENT_ERROR (default_callback) dest: %s error: %s\n", bev_arg->destination->s, evutil_socket_error_to_string(evutil_socket_geterror(bufferevent_getfd(bev))));
+                    logmsg ("BEV_EVENT_ERROR (default_callback) dest: %s error: %s", bev_arg->destination->s, evutil_socket_error_to_string(evutil_socket_geterror(bufferevent_getfd(bev))));
                 } else if (events & BEV_EVENT_TIMEOUT) {
-                    logmsg ("BEV_EVENT_TIMEOUT dest: %s\n", bev_arg->destination->s);
+                    logmsg ("BEV_EVENT_TIMEOUT dest: %s", bev_arg->destination->s);
                 }
 
             }
@@ -207,10 +207,10 @@ event_callback (struct bufferevent *bev, short events, void *ptr)
 
             free (bev_arg);
         } else {
-            logmsg ("unknown events: %d\n", events);
+            logmsg ("unknown events: %d", events);
         }
     } else {
-        logmsg ("remote socket doesnt exist ?\n");
+        logmsg ("remote socket doesnt exist ?");
 
         if (bev_arg->connect_timer) {
             event_free (bev_arg->connect_timer);
@@ -231,9 +231,9 @@ connect_timeout_cb (evutil_socket_t fd, short what, void *arg)
     struct bev_arg *bev_arg = arg;
 
     if (bev_arg->destination) {
-        logmsg ("connection timeout to %s\n", bev_arg->destination->s);
+        logmsg ("connection timeout to %s", bev_arg->destination->s);
     } else {
-        logmsg ("connection timeout to unknown\n");
+        logmsg ("connection timeout to unknown");
     }
 
     if (bev_arg->connect_timer) {

@@ -75,7 +75,7 @@ create_listen_socket (char *arg)
     for (i=0,ok=0;i<25;i++) {
         if (bind (sock, s, socklen) == -1) {
             /* if cannot bind sleep 200ms and retry 25x */
-            fprintf(stderr,"bind() to %s failed\n", arg);
+            fprintf(stderr,"bind() to %s failed", arg);
             usleep(200*1000);
         } else {
             ok=1;
@@ -83,7 +83,7 @@ create_listen_socket (char *arg)
         }
     }
     if (ok==0) {
-        fprintf(stderr,"bind() to %s failed, exiting\n", arg);
+        fprintf(stderr,"bind() to %s failed, exiting", arg);
         _exit (-1);
     }
 
@@ -105,10 +105,10 @@ create_listen_socket (char *arg)
     fcntl (sock, F_SETFL, O_RDWR | O_NONBLOCK);
 
     if (type == SOCKET_TCP) {
-        printf ("listening on tcp:%s:%s\n", host_str, port_str);
+        printf ("listening on tcp:%s:%s", host_str, port_str);
     } else if (type == SOCKET_UNIX) {
         chmod (sockfile_str, 0777);
-        printf ("listening on sock:%s\n", sockfile_str);
+        printf ("listening on sock:%s", sockfile_str);
     } else {
         usage ();
         _exit (-1);
@@ -312,7 +312,7 @@ accept_connect (int sock, short event, void *arg)
         bev_arg_target->failover_first_dst = destination;
 
         if (bufferevent_socket_connect (bev_target, s, len) == -1) {
-            logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
+            logmsg ("bufferevent_socket_connect return -1 (full fd?)");
             listener->nr_conn--;
             bufferevent_free (bev_client);
             bufferevent_free (bev_target);
@@ -417,7 +417,7 @@ cache_init_packet_from_server ()
     /* event_callback() will be called after nonblock connect() return 
      */
     if (bufferevent_socket_connect (bev, s, len) == -1) {
-        logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
+        logmsg ("bufferevent_socket_connect return -1 (full fd?)");
         bufferevent_free (bev);
         free (bev_arg);
         return;
@@ -461,7 +461,7 @@ void failover(struct bev_arg *bev_arg_target) {
             destination = bev_arg_target->destination->next;
         } else {
             /* we tried all destinations */
-            logmsg ("we tried all destinations\n");
+            logmsg ("we tried all destinations");
             bev_arg_client->listener->nr_conn--;
             bufferevent_free (bev_client);
             free (bev_arg_client);
@@ -483,7 +483,7 @@ void failover(struct bev_arg *bev_arg_target) {
 
     if (destination == bev_arg_target->failover_first_dst) {
         /* we tried all destinations */
-        logmsg ("we tried all destinations\n");
+        logmsg ("we tried all destinations");
         bev_arg_client->listener->nr_conn--;
         bufferevent_free (bev_client);
         free (bev_arg_client);
@@ -505,7 +505,7 @@ void failover(struct bev_arg *bev_arg_target) {
     /* read buffer 64kb */
     bufferevent_setwatermark (bev_target, EV_READ, 0, INPUT_BUFFER_LIMIT);
 
-    logmsg ("reconnect to %s\n", destination->s);
+    logmsg ("reconnect to %s", destination->s);
     if (destination->s[0] == SOCKET_TCP) {
         s = (struct sockaddr *) &destination->sin;
         len = destination->addrlen;
@@ -517,7 +517,7 @@ void failover(struct bev_arg *bev_arg_target) {
 
     bev_arg_target->connecting = 1;
     if (bufferevent_socket_connect (bev_target, s, len) == -1) {
-        logmsg ("bufferevent_socket_connect return -1 (full fd?)\n");
+        logmsg ("bufferevent_socket_connect return -1 (full fd?)");
         bev_arg_client->listener->nr_conn--;
         bufferevent_free (bev_client);
         bufferevent_free (bev_target);
