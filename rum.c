@@ -60,6 +60,7 @@ main (int ac, char *av[])
         }
     }
 
+    openlog("rum", LOG_NDELAY|LOG_PID, LOG_DAEMON);
 
     if (ac == 1) {
         usage ();
@@ -313,78 +314,14 @@ void
 logmsg (const char *fmt, ...)
 {
     va_list args;
-    static FILE *fp = NULL;
-    static ino_t inode = 0;
-    char outstr[200];
-    time_t t;
-    struct tm *tmp;
-    struct stat statbuf;
-    int staterror = 0;
-    static char lastmsg[4096];
     char tmpmsg[4096];
-    static int samemsg=0;
-
-    t = time (NULL);
-    tmp = localtime (&t);
-    if (tmp == NULL) {
-        perror ("localtime");
-        return;
-    }
-
-    if (stat ("/var/log/rum.log", &statbuf) !=0 )
-    {
-        staterror=1;
-    }
-
-    if (!fp) {
-        fp = fopen ("/var/log/rum.log", "a");
-    } else {
-        if (inode != statbuf.st_ino || staterror) {
-            fclose(fp);
-            fp = fopen ("/var/log/rum.log", "a");
-            inode = statbuf.st_ino;
-        }
-    }
-
-    if (!fp) {
-        fprintf (stderr, "cannot open logfile\n");
-        fflush (stderr);
-        return;
-    }
 
     va_start (args, fmt);
     vsnprintf (tmpmsg, sizeof(tmpmsg), fmt, args);
     va_end (args);
 
-    if (!strcmp (lastmsg, tmpmsg)) {
-        samemsg++;
-        return;
-    } else {
-        strncpy(lastmsg, tmpmsg, sizeof(lastmsg));
-    }
+    syslog(LOG_DAEMON|LOG_WARNING, "[%s] %s", logstring, tmpmsg);
 
-    if (strftime (outstr, sizeof (outstr), "%Y-%m-%d %H:%M:%S", tmp) == 0) {
-        fprintf (stderr, "strftime returned 0");
-        fclose (fp);
-        return;
-    }
-
-    if (samemsg>0) {
-        fprintf (fp, "%s ", outstr);
-        fprintf (fp, "[%s] ", logstring);
-        fprintf (fp, "last message repeated %d times\n", samemsg);
-        samemsg=0;
-    }
-
-
-    fprintf (fp, "%s ", outstr);
-    fprintf (fp, "[%s] ", logstring);
-
-    va_start (args, fmt);
-    vfprintf (fp, fmt, args);
-    va_end (args);
-/*    fprintf(fp, " (open fds: %d)\n", get_num_fds()); */
-    fflush (fp);
 }
 
 /* implementation of Donal Fellows method */
