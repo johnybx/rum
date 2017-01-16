@@ -89,12 +89,14 @@ get_data_from_cdb (char *user, int user_len, char **mysql_server,
     char tmp[1024];
 
     if (cdb_fd == -1) {
+        logmsg("get_data_from_cdb: cdb_fd == -1 (user %s)\n", user);
         return;
     }
 
     result = cdb_find (&cdb, user, user_len);
 
     if (result <= 0) {
+        logmsg("get_data_from_cdb: cdb_find result <= 0 (user %s)\n", user);
         return;
     }
 
@@ -102,6 +104,7 @@ get_data_from_cdb (char *user, int user_len, char **mysql_server,
     dlen = cdb_datalen (&cdb);
 
     if (dlen > sizeof (tmp)) {
+        logmsg("get_data_from_cdb: dlen > sizeof (tmp) (user %s)\n", user);
         return;
     }
 
@@ -126,6 +129,7 @@ reopen_cdb (int sig, short event, void *a)
 
     if ((cdb_fd = open (mysql_cdb_file, O_RDONLY)) == -1) {
         cdb_fd = -1;
+        logmsg("reopen_cdb: open failed (%s)\n", strerror(errno));
     } else {
         cdb_init (&cdb, cdb_fd);
     }
