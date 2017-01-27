@@ -1,7 +1,7 @@
 CC=gcc
 LD=ld
 
-LIBEVENT_DIR=libevent-release-2.1.7-rc
+LIBEVENT_DIR=libevent-release-2.1.8-stable
 
 #LDFLAGS=-flto
 LDLIBS=-L ${LIBEVENT_DIR}/.libs -lrt -lcdb -lm
