@@ -6,7 +6,9 @@ LIBEVENT_DIR=libevent-release-2.1.8-stable
 #LDFLAGS=-flto
 LDLIBS=-L ${LIBEVENT_DIR}/.libs -lrt -lcdb -lm
 #CFLAGS=-Wall -O2 -flto -g -I ${LIBEVENT_DIR}/include
-CFLAGS=-Wall -O2 -g -I ${LIBEVENT_DIR}/include
+CFLAGS=-Wall -O2 -march=sandybridge -flto -g -I ${LIBEVENT_DIR}/include
+LDFLAGS=-Wall -O2 -march=sandybridge -flto -g
+
 
 all: ${LIBEVENT_DIR}/.libs/libevent.a rum 
 
@@ -16,8 +18,8 @@ rum: rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o st
 
 ${LIBEVENT_DIR}/.libs/libevent.a:
 	-$(shell echo 'compiling libevent, wait' >&2)
-	-$(shell echo 'cd $(LIBEVENT_DIR); CFLAGS="-O2" ./configure --disable-shared --enable-static --disable-openssl --disable-debug-mode; make clean; make' >&2)
-	-$(shell cd $(LIBEVENT_DIR); CFLAGS="-O2" ./configure --disable-shared --enable-static --disable-openssl --disable-debug-mode; make clean; make)
+	-$(shell echo 'cd $(LIBEVENT_DIR); AR=gcc-ar RANLIB=gcc-ranlib CFLAGS="-O2 -flto -fno-fat-lto-objects -march=sandybridge" LDFLAGS="-O2 -flto -fno-fat-lto-objects -march=sandybridge"./configure --disable-shared --enable-static --disable-openssl --disable-debug-mode; make clean; make' >&2)
+	-$(shell cd $(LIBEVENT_DIR); AR=gcc-ar RANLIB=gcc-ranlib CFLAGS="-O2 -flto -fno-fat-lto-objects -march=sandybridge" LDFLAGS="-O2 -flto -fno-fat-lto-objects -march=sandybridge" ./configure --disable-shared --enable-static --disable-openssl --disable-debug-mode; make clean; make)
 
 .PHONY : clean cleanlibevent
 
