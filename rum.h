@@ -23,11 +23,10 @@
 #include <time.h>
 #include <dirent.h>
 #include <getopt.h>
+#include <assert.h>
 
-#include "event2/event.h"
-#include "event2/bufferevent.h"
-#include "event2/buffer.h"
-#include "event2/util.h"
+#include "uv.h"
+#include "bufpool.h"
 
 #define MYSQL50_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x30\x2e\x39\x32\x2d\x6c\x6f\x67\x00\xbf\x96\xc2\x10\x69\x5f\x21\x23\x2a\x49\x73\x26\x00\x2c\xa2\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x60\x36\x28\x65\x44\x66\x54\x53\x22\x4c\x3b\x22\x00"
 #define MYSQL51_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x31\x2e\x36\x33\x2d\x6c\x6f\x67\x00\xc2\x0d\xca\x73\x47\x46\x65\x4b\x29\x29\x30\x57\x00\xff\xf7\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x45\x32\x6a\x42\x48\x23\x73\x3e\x76\x5c\x4b\x3f\x00"
@@ -37,14 +36,10 @@
 #define ERR_LOGIN_PACKET_PREFIX "\x00\x00\x00\x02\xff\x15\x04\x23\x32\x38\x30\x30\x30"
 
 /* max length of data in socket output buffer */
-#define INPUT_BUFFER_LIMIT 65535
-#define OUTPUT_BUFFER_LIMIT 65535
+#define OUTPUT_BUFFER_LIMIT 16384
 
-#define CONNECT_TIMEOUT 6
-#define READ_TIMEOUT 6          /* only for first data from server, if mysql is stuck and dont send any data within READ_TIMEOUT we drop connection */
-
-/* cdb file is reopened every 2 seconds */
-#define CDB_RELOAD_TIME 2
+#define CONNECT_TIMEOUT 60
+#define READ_TIMEOUT 60          /* only for first data from server, if mysql is stuck and dont send any data within READ_TIMEOUT we drop connection */
 
 #define MYSQL_PACKET_HEADER_SIZE 4
 #define MYSQL_INIT_PACKET_MIN_SIZE 46
@@ -60,7 +55,7 @@
 
 struct listener
 {
-    int fd;                     /* listening socket */
+    uv_stream_t *stream;                     /* listening stream */
     char *s;                    /* string (tcp:blah:blah or sock:blah) */
 
     /* statistics */
@@ -94,7 +89,7 @@ struct destination
 */
 struct bev_arg
 {
-    struct bufferevent *bev;    /* bufferevent with input/output evbuffer a 1 associated socket fd */
+    uv_stream_t *stream;
     struct bev_arg *remote;     /* bev_arg ptr to remote socket bev_arg */
     struct listener *listener;  /* used for statistics */
     struct destination *failover_first_dst;
@@ -113,9 +108,13 @@ struct bev_arg
     char connecting;
     /* check if we need to failover or not */
     char connected;
-    struct event *connect_timer;
-    short read_timeout;
+//    struct event *connect_timer;
+    uv_timer_t *connect_timer;
+    uv_timer_t *read_timer;
+//    short read_timeout;
     struct destination *destination;
+    short uv_closed;
+    short read_stopped;
 };
 
 struct mysql_mitm
@@ -149,10 +148,14 @@ void randomize_destinations (void);
 void shuffle(struct destination **array, size_t n);
 
 /* socket.c */
-int create_listen_socket (char *wwtf);
-void accept_connect (int fd, short event, void *arg);
+void on_shutdown(uv_shutdown_t *shutdown, int status);
+void on_close_timer(uv_handle_t* handle);
+void on_close(uv_handle_t* handle);
+struct bev_arg *create_server_connection(struct bev_arg *bev_arg_client, struct destination *destination, struct listener *listener);
+void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf);
+uv_stream_t *create_listen_socket (char *wwtf);
+void on_incoming_connection (uv_stream_t *server, int status);
 void prepareclient (char *wwtf, struct destination *destination);
-void cache_init_packet_from_server ();
 void failover(struct bev_arg *bev_target);
 
 /* parse_arg.c */
@@ -162,12 +165,21 @@ void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
                 int unlink_socket);
 
 /* default_callback.c */
+
+void on_write(uv_write_t* req, int status);
+void on_write_then_close(uv_write_t* req, int status);
+void on_write_free(uv_write_t* req, int status);
+void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
+/*
 void read_callback (struct bufferevent *bev, void *ptr);
 void write_callback (struct bufferevent *bev, void *ptr);
 void event_callback (struct bufferevent *bev, short callbacks, void *ptr);
-void connect_timeout_cb (evutil_socket_t fd, short what, void *arg);
+*/
+//void connect_timeout_cb (evutil_socket_t fd, short what, void *arg);
 
 /* mysql_callback.c */
+void mysql_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
+/*
 void mysql_read_callback (struct bufferevent *bev, void *ptr);
 void mysql_write_callback (struct bufferevent *bev, void *ptr);
 void mysql_event_callback (struct bufferevent *bev, short callbacks,
@@ -176,51 +188,54 @@ void cache_mysql_init_packet_read_callback (struct bufferevent *bev,
                                             void *ptr);
 void cache_mysql_init_packet_event_callback (struct bufferevent *bev,
                                              short events, void *ptr);
-void mysql_connect_timeout_cb (evutil_socket_t fd, short what, void *arg);
+//void mysql_connect_timeout_cb (evutil_socket_t fd, short what, void *arg);
+*/
 
 /* postgresql_callback.c */
+void postgresql_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
+/*
 void postgresql_read_callback (struct bufferevent *bev, void *ptr);
 void postgresql_write_callback (struct bufferevent *bev, void *ptr);
 void postgresql_event_callback (struct bufferevent *bev, short callbacks,
                            void *ptr);
-void postgresql_connect_timeout_cb (evutil_socket_t fd, short what, void *arg);
+*/
+//void postgresql_connect_timeout_cb (evutil_socket_t fd, short what, void *arg);
 
 /* postgresql_mitm.c */
 int pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
-                                    struct bufferevent *bev, int len,
-                                    struct bufferevent *bev_remote);
+                                     const uv_buf_t *buf, size_t nread);
 int
-pg_handle_auth_with_server (struct bev_arg *bev_arg, struct bufferevent *bev,
-                         struct bufferevent *bev_remote);
+pg_handle_auth_with_server (struct bev_arg *bev_arg, const uv_buf_t *buf, size_t nread);
 
 /* mysql_mitm.c */
 struct mysql_mitm *init_ms ();
 void free_ms (struct mysql_mitm *ms);
 char *get_scramble_from_init_packet (char *packet, size_t len);
 int handle_init_packet_from_server (struct bev_arg *bev_arg,
-                                    struct bufferevent *bev, int len,
-                                    struct bufferevent *bev_remote);
+                                     const uv_buf_t *buf, size_t nread);
 int handle_auth_packet_from_client (struct bev_arg *bev_arg,
-                                    struct bufferevent *bev, int len,
-                                    struct bufferevent *bev_remote);
-int handle_auth_with_server (struct bev_arg *bev_arg, struct bufferevent *bev,
-                             int len, struct bufferevent *bev_remote);
+                                    const uv_buf_t *buf, size_t nread);
+int handle_auth_with_server (struct bev_arg *bev_arg, const uv_buf_t *buf, size_t nread);
 char *set_random_scramble_on_init_packet (char *packet, void *p1, void *p2);
 
 /* mysql_cdb.h */
 void init_mysql_cdb_file ();
 void get_data_from_cdb (char *user, int user_len, char **mysql_server,
                         char **mysql_password);
-void reopen_cdb (int sig, short event, void *a);
+void reopen_cdb (uv_fs_event_t *handle, const char *filename, int events, int status);
 
 /* postgresql_cdb.h */
 void init_postgresql_cdb_file ();
 void get_data_from_cdb_postgresql (char *user, int user_len, char **postgresql_server);
-void reopen_cdb_postgresql (int sig, short event, void *a);
+void reopen_cdb_postgresql (uv_fs_event_t *handle, const char *filename, int events, int status);
 
 
 /* stats.c */
+void send_stats_to_client (uv_stream_t *stream);
+/*
 void stats_event_callback (struct bufferevent *bev, short callbacks,
                            void *ptr);
 void stats_write_callback (struct bufferevent *bev, void *ptr);
 void send_stats_to_client (struct bufferevent *bev);
+*/
+

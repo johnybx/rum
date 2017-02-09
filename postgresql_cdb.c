@@ -1,7 +1,5 @@
 #include "rum.h"
 
-extern struct event_base *event_base;
-
 char *postgresql_cdb_file = NULL;
 struct cdb postgresql_cdb;
 int postgresql_cdb_fd;
@@ -10,12 +8,9 @@ struct event *postgresql_ev_signal;
 void
 init_postgresql_cdb_file (char *type)
 {
-    struct timeval tv;
-
-    postgresql_ev_signal = event_new (event_base, SIGUSR1, EV_SIGNAL, reopen_cdb_postgresql, NULL);
-    tv.tv_usec = 0;
-    tv.tv_sec = CDB_RELOAD_TIME;
-    event_add (postgresql_ev_signal, &tv);
+    uv_fs_event_t *fs_event_req = malloc(sizeof(uv_fs_event_t));
+    uv_fs_event_init(uv_default_loop(), fs_event_req);
+    uv_fs_event_start(fs_event_req, reopen_cdb_postgresql, postgresql_cdb_file, 0);
 
     if ((postgresql_cdb_fd = open (postgresql_cdb_file, O_RDONLY)) == -1) {
     	return;
@@ -63,11 +58,13 @@ get_data_from_cdb_postgresql (char *user, int user_len, char **postgresql_server
     return;
 }
 
-/* every CDB_RELOAD_TIME reopen postgresql_cdb_file */
 void
-reopen_cdb_postgresql (int sig, short event, void *a)
+reopen_cdb_postgresql (uv_fs_event_t *handle, const char *filename, int events, int status)
 {
-    struct timeval tv;
+    /* re-arm inotify watch before reopening file */
+    uv_fs_event_stop(handle);
+    uv_fs_event_init(uv_default_loop(), handle);
+    uv_fs_event_start(handle, reopen_cdb_postgresql, postgresql_cdb_file, 0);
 
     if (postgresql_cdb_fd != -1) {
         cdb_free (&postgresql_cdb);
@@ -79,10 +76,4 @@ reopen_cdb_postgresql (int sig, short event, void *a)
     } else {
         cdb_init (&postgresql_cdb, postgresql_cdb_fd);
     }
-
-    tv.tv_usec = 0;
-    tv.tv_sec = CDB_RELOAD_TIME;
-
-    /* re-add the ev_signal to min event loop */
-    event_add (postgresql_ev_signal, &tv);
 }

@@ -1,6 +1,7 @@
 #include "rum.h"
 
-extern struct event_base *event_base;
+extern bufpool_t *pool;
+
 extern struct destination *first_destination;
 extern char *mysql_cdb_file;
 extern char *postgresql_cdb_file;
@@ -27,14 +28,130 @@ extern int server_keepcnt;
 extern int server_keepidle;
 extern int server_keepintvl;
 
+void on_shutdown(uv_shutdown_t *shutdown, int status)
+{
+    struct bev_arg *bev_arg = shutdown->handle->data;
+
+    /* this can happend when client close connection before server send any data */
+    if (bev_arg->read_timer) {
+        uv_timer_stop(bev_arg->read_timer);
+        uv_close((uv_handle_t *)bev_arg->read_timer, on_close_timer);
+        bev_arg->read_timer = NULL;
+    }
+
+    /* this can happend when client close connection before server accept connection */
+    if (bev_arg->connect_timer) {
+        uv_timer_stop(bev_arg->connect_timer);
+        uv_close((uv_handle_t *)bev_arg->connect_timer, on_close_timer);
+        bev_arg->connect_timer = NULL;
+    }
+
+    if (bev_arg->ms) {
+        free_ms (bev_arg->ms);
+        if (bev_arg->remote && bev_arg->remote->ms) {
+            bev_arg->remote->ms = NULL;
+        }
+    }
+
+    if (bev_arg->remote && bev_arg->remote->stream) {
+        bev_arg->remote->remote = NULL;
+        uv_read_stop((uv_stream_t *)bev_arg->remote->stream);
+
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->remote->stream, on_shutdown)) {
+            free(shutdown);
+        }
+    }
+
+
+    uv_close((uv_handle_t *)shutdown->handle, on_close);
+    free(shutdown);
+}
+
+
+
+void on_connect_timeout (uv_timer_t *timer)
+{
+    struct bev_arg *bev_arg = timer->data;
+
+    uv_timer_stop(timer);
+    uv_close((uv_handle_t *)timer, on_close_timer);
+    bev_arg->connect_timer = NULL;
+    /* we cannot call here uv_shutdown because it will fail (socket is not connected) */
+    bev_arg->uv_closed = 1;
+    uv_close((uv_handle_t *)bev_arg->stream, on_close);
+}
+
+void on_read_timeout (uv_timer_t *timer)
+{
+    struct bev_arg *bev_arg = timer->data;
+
+    uv_timer_stop(timer);
+    uv_close((uv_handle_t *)timer, on_close_timer);
+    bev_arg->read_timer = NULL;
+    uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+    uv_shutdown(shutdown, bev_arg->stream, on_shutdown);
+}
+void on_close_timer(uv_handle_t* handle)
+{
+    free(handle);
+}
+
+void on_close(uv_handle_t* handle)
+{
+    struct bev_arg *bev_arg = handle->data;
+
+    if (bev_arg->type == BEV_CLIENT) {
+        bev_arg->listener->nr_conn--;
+    }
+
+    free(handle);
+    free(bev_arg);
+}
+
+/* after every write release buffers */
+void on_write(uv_write_t* req, int status) {
+    /* Logic which handles the write result */
+    struct bev_arg *bev_arg = req->handle->data;
+
+    uv_buf_t *buf = (uv_buf_t *)req->data;
+
+    /* if reading from remote socket was stopped because o non-zero write_queue, reenable reading  */
+    if (bev_arg->read_stopped && bev_arg->remote && req->handle->write_queue_size == 0) {
+        fprintf(stderr, "starting read %d\n", req->handle->write_queue_size);
+        uv_read_start(bev_arg->remote->stream, alloc_cb, on_read);
+        bev_arg->read_stopped=0;
+    }
+
+    bufpool_release(buf->base);
+    free(buf);
+    free(req);
+}
+
+/* used only from stats */
+void on_write_free(uv_write_t* req, int status) {
+    uv_buf_t *buf = (uv_buf_t *)req->data;
+    free(buf->base);
+    free(buf);
+    free(req);
+}
+
+
+/* only used if we send cache_mysql_init_packet which we dont want to free() */
+void on_write_nofree(uv_write_t* req, int status) {
+    /* Logic which handles the write result */
+    uv_buf_t *buf = (uv_buf_t *)req->data;
+    free(buf);
+    free(req);
+}
+
 /*
  * create_listen_socket return O_NONBLOCK socket ready for accept()
  * arg - tcp:blah:blah alebo sock:blah
  */
-int
+uv_stream_t *
 create_listen_socket (char *arg)
 {
-    int sock, sockopt;
     char *arg_copy;
     struct sockaddr *s = NULL;
     struct sockaddr_in sin;
@@ -42,9 +159,10 @@ create_listen_socket (char *arg)
     socklen_t socklen;
     uint16_t port;
     char type;
-    int domain;
     char *host_str, *port_str, *sockfile_str;
-    int i,ok;
+    int i,ok,r;
+    uv_tcp_t *tcp_t;
+    uv_pipe_t *pipe_t;
 
     arg_copy = strdup (arg);
     /* parse string arg_copy into variables
@@ -55,68 +173,48 @@ create_listen_socket (char *arg)
 
     if (type == SOCKET_TCP) {
         s = (struct sockaddr *) &sin;
-        domain = PF_INET;
+        tcp_t = malloc(sizeof(uv_tcp_t));
+        uv_tcp_init(uv_default_loop(), tcp_t);
     } else if (type == SOCKET_UNIX) {
         s = (struct sockaddr *) &sun;
-        domain = PF_UNIX;
+        pipe_t = malloc(sizeof(uv_pipe_t));
+        uv_pipe_init(uv_default_loop(), pipe_t, 0);
     } else {
         usage ();
         _exit (-1);
     }
-
-    if ((sock = socket (domain, SOCK_STREAM, 0)) == -1) {
-        perror ("socket");
-        _exit (-1);
-    }
-
-    sockopt = 1;
-    setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof (sockopt));
 
     for (i=0,ok=0;i<25;i++) {
-        if (bind (sock, s, socklen) == -1) {
+        if (type == SOCKET_TCP) {
+            r = uv_tcp_bind(tcp_t, (const struct sockaddr*)s, 0);
+        } else if (type == SOCKET_UNIX) {
+            r = uv_pipe_bind(pipe_t, sun.sun_path);
+        }
+
+        if (r != 0) {
             /* if cannot bind sleep 200ms and retry 25x */
-            fprintf(stderr,"bind() to %s failed", arg);
+            fprintf(stderr,"bind() to %s failed\n", arg);
             usleep(200*1000);
         } else {
             ok=1;
             break;
         }
-    }
+     }
+
     if (ok==0) {
-        fprintf(stderr,"bind() to %s failed, exiting", arg);
-        _exit (-1);
-    }
-
-    for (i=0,ok=0;i<20;i++) {
-        if (listen (sock, 255) == -1) {
-            /* if cannot bind sleep 200ms and retry 20x */
-            fprintf(stderr,"listen() to %s failed", arg);
-            usleep(200*1000);
-        } else {
-            ok=1;
-            break;
-        }
-    }
-    if (ok==0) {
-        fprintf(stderr,"bind() to %s failed, exiting", arg);
-        _exit (-1);
-    }
-
-    fcntl (sock, F_SETFL, O_RDWR | O_NONBLOCK);
-
-    if (type == SOCKET_TCP) {
-        printf ("listening on tcp:%s:%s", host_str, port_str);
-    } else if (type == SOCKET_UNIX) {
-        chmod (sockfile_str, 0777);
-        printf ("listening on sock:%s", sockfile_str);
-    } else {
-        usage ();
+        fprintf(stderr,"bind() to %s failed, exiting\n", arg);
         _exit (-1);
     }
 
     free (arg_copy);
 
-    return sock;
+
+    if (type == SOCKET_TCP) {
+        uv_tcp_nodelay((uv_tcp_t *)tcp_t,1);
+        return (uv_stream_t *)tcp_t;
+    } else {
+        return (uv_stream_t *)pipe_t;
+    }
 }
 
 /* fill destination->sin or destination->sun and destination->socklen
@@ -140,23 +238,116 @@ prepareclient (char *arg, struct destination *destination)
     free (arg_copy);
 }
 
+/* after successful/not successful connect() */
+void
+on_outgoing_connection (uv_connect_t *connect, int status)
+{
+    struct bev_arg *bev_arg = connect->data;
+    int r;
+    uv_stream_t *stream = connect->handle;
+
+    free(connect);
+
+    if (status<0) {
+            /* TODO: failover */
+
+            /* if we hit connect_timeout, we already call uv_close() in on_connect_timeout() */
+            /* calling it again will cause segfault */
+            if (!bev_arg->uv_closed) {
+            // TODO TEST
+                uv_close((uv_handle_t *)stream, on_close);
+          }
+        
+        return;
+    }
+
+    if (bev_arg->connect_timer) {
+        uv_timer_stop(bev_arg->connect_timer);
+        uv_close((uv_handle_t *)bev_arg->connect_timer, on_close_timer);
+        bev_arg->connect_timer = NULL;
+    }
+
+    bev_arg->stream = stream;
+
+    // TODO
+    uv_tcp_nodelay((uv_tcp_t *)stream, 1);
+
+    /* on successfull connect */
+    if (mysql_cdb_file) {
+        r = uv_read_start(stream, alloc_cb, mysql_on_read);
+
+        if (r) {
+        }
+    } else if (postgresql_cdb_file) {
+        r = uv_read_start(stream, alloc_cb, on_read);
+
+        if (r) {
+        }
+        /* send server client auth packet */
+        if (bev_arg->ms && bev_arg->ms->client_auth_packet) {
+            uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+            uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
+            newbuf->base=bev_arg->ms->client_auth_packet;
+            newbuf->len=bev_arg->ms->client_auth_packet_len;
+            req->data = newbuf;
+            bev_arg->ms->client_auth_packet = NULL;
+            if (uv_write(req, stream, newbuf, 1, on_write)) {
+                logmsg ("on_outgoing_connection(): uv_write(postgresql client_auth_packet) failed");
+
+                free(newbuf->base);
+                free(newbuf);
+                free(req);
+
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                uv_shutdown(shutdown, stream, on_shutdown);
+            }
+
+        }
+        /* change client callback to on_read */
+        r = uv_read_start(bev_arg->remote->stream, alloc_cb, on_read);
+
+    } else {
+        r = uv_read_start(stream, alloc_cb, on_read);
+
+        if (r) {
+        }
+
+        /* enable client read */
+        r = uv_read_start(bev_arg->remote->stream, alloc_cb, on_read);
+
+        if (r) {
+        }
+    }
+
+    /* set read timeout for server socket */
+    bev_arg->read_timer = malloc(sizeof(uv_timer_t));
+    uv_timer_init(uv_default_loop(), bev_arg->read_timer);
+    bev_arg->read_timer->data=bev_arg;
+    uv_timer_start(bev_arg->read_timer, on_read_timeout, read_timeout * 1000, 0);
+}
+
 /*
- * accept socket, then create buffer events for self and remote
+ * accept() new connection from client
  */
 void
-accept_connect (int sock, short event, void *arg)
+on_incoming_connection (uv_stream_t *server, int status)
 {
-    struct listener *listener = (struct listener *) arg;
-    socklen_t len;
-    struct sockaddr_in sin;
-    struct sockaddr_un sun;
-    int csock = 0;
-    int flag = 1;
-    struct bufferevent *bev_client, *bev_target;
+    struct listener *listener = (struct listener *) server->data;
     struct bev_arg *bev_arg_client, *bev_arg_target;
 
     struct destination *destination=NULL;
-    struct sockaddr *s = NULL;
+            int r;
+
+/*
+    uv_tcp_t *client = malloc(sizeof(uv_tcp_t));
+    uv_pipe_t *client = malloc(sizeof(uv_pipe_t));
+*/
+    uv_stream_t *client;
+    if (listener->type == SOCKET_TCP) {
+        client = malloc(sizeof(uv_tcp_t));
+    } else {
+        client = malloc(sizeof(uv_pipe_t));
+    }
 
     if (mode == MODE_NORMAL) {
         destination=first_destination;
@@ -176,377 +367,156 @@ accept_connect (int sock, short event, void *arg)
         }
     }
 
-    if (listener->s[0] == SOCKET_TCP) {
-        len = sizeof (struct sockaddr_in);
-        s = (struct sockaddr *) &sin;
-    } else if (listener->s[0] == SOCKET_UNIX) {
-        len = sizeof (struct sockaddr_un);
-        s = (struct sockaddr *) &sun;
-    }
+    client = malloc (sizeof (uv_tcp_t));
+    uv_tcp_init(uv_default_loop(), (uv_tcp_t *)client);
 
-    csock = accept4 (sock, s, &len, SOCK_NONBLOCK);
-    if (listener->s[0] == SOCKET_TCP) {
-        setsockopt (csock, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof (int));
-    }
-
-    if (csock == -1) {
+    if (uv_accept(server, (uv_stream_t *)client)) {
+        logmsg ("on_incoming_connection: uv_accept failed");
+        free(client);
         return;
     }
 
-    if (client_keepalive) {
-        setsockopt(csock, SOL_SOCKET, SO_KEEPALIVE, &client_keepalive, sizeof(client_keepalive));
-
-        if (client_keepcnt) {
-            setsockopt(csock, SOL_TCP, TCP_KEEPCNT, &client_keepcnt, sizeof(client_keepcnt));
-        }
-        if (client_keepidle) {
-            setsockopt(csock, SOL_TCP, TCP_KEEPIDLE, &client_keepidle, sizeof(client_keepidle));
-        }
-        if (client_keepintvl) {
-            setsockopt(csock, SOL_TCP, TCP_KEEPINTVL, &client_keepintvl, sizeof(client_keepintvl));
-        }
-    }
-
     listener->nr_allconn++;
-
-    /* the first turn the switch on */
-    /* the last turn the switch off */
     listener->nr_conn++;
 
+/*
     bev_client =
         bufferevent_socket_new (event_base, csock, BEV_OPT_CLOSE_ON_FREE);
     bev_target =
         bufferevent_socket_new (event_base, -1, BEV_OPT_CLOSE_ON_FREE);
+*/
 
     /* CLIENT bev_arg */
     /* parameter for callback functions */
     bev_arg_client = malloc (sizeof (struct bev_arg));
     bev_arg_client->type = BEV_CLIENT;
     bev_arg_client->listener = listener;
-    bev_arg_client->bev = bev_client;
+    bev_arg_client->stream = client;
     bev_arg_client->connecting = 0;
     bev_arg_client->connected = 0;
     bev_arg_client->connect_timer = NULL;
-    bev_arg_client->read_timeout = 0;
+    bev_arg_client->read_timer = NULL;
     bev_arg_client->destination = NULL;
+    bev_arg_client->ms = NULL;
+    bev_arg_client->uv_closed = 0;
+    bev_arg_client->read_stopped = 0;
+
+    client->data = bev_arg_client;
+    bev_arg_client->remote = NULL;
 
     /* set callback functions and argument */
     if (listener->type == LISTENER_DEFAULT) {
         if (!mysql_cdb_file && !postgresql_cdb_file) {
-            bufferevent_setcb (bev_client, read_callback, NULL, event_callback,
-                               (void *) bev_arg_client);
+            /* enable read callback after we connect to remote server */
         } else if (mysql_cdb_file) {
             /* if mysql_cdb is enabled, use different callback functions */
             bev_arg_client->ms = init_ms ();
-            bufferevent_setcb (bev_client, mysql_read_callback, NULL,
-                               mysql_event_callback, (void *) bev_arg_client);
+
+            bev_arg_client->remote = NULL;
+            bev_arg_client->ms->not_need_remote = 1;
+            bev_arg_client->ms->handshake = 1;
+
+            /* we use bev_arg_client and ms pointers as random data for generating random string filled in init packet send to client */
+            /* TODO: use better random input */
+            bev_arg_client->ms->scramble1 =
+                set_random_scramble_on_init_packet (cache_mysql_init_packet,
+                                                bev_arg_client->stream,
+                                                bev_arg_client->ms);
+
+            r = uv_read_start((uv_stream_t *)client, alloc_cb, mysql_on_read);
+            if (r) {
+                fprintf(stderr, "uv_read_start failed\n");
+            }
+
+            uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+            uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
+            newbuf->base=cache_mysql_init_packet;
+            newbuf->len=cache_mysql_init_packet_len;
+            req->data = newbuf;
+            if (uv_write(req, client, newbuf, 1, on_write_nofree)) {
+                logmsg ("on_incoming_connection(): uv_write(cache_mysql_init_packet) failed");
+                free(newbuf);
+                free(req);
+
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                uv_shutdown(shutdown, bev_arg_client->stream, on_shutdown);
+                //uv_close((uv_handle_t *)bev_arg_client->stream, on_close);
+            }
+
+            return;
         } else if (postgresql_cdb_file) {
             /* if postgresql_cdb is enabled, use different callback functions */
             bev_arg_client->ms = init_ms ();
-            bufferevent_setcb (bev_client, postgresql_read_callback, NULL,
-                               postgresql_event_callback, (void *) bev_arg_client);
 
+            bev_arg_client->remote = NULL;
+            bev_arg_client->ms->not_need_remote = 1;
+            bev_arg_client->ms->handshake = 1;
+
+            int r = uv_read_start((uv_stream_t *)client, alloc_cb, postgresql_on_read);
+            if (r) {
+                fprintf(stderr, "uv_read_start failed\n");
+            }
+            return;
         }
     } else if (listener->type == LISTENER_STATS) {
-        bufferevent_setcb (bev_client, NULL, stats_write_callback,
-                           stats_event_callback, (void *) bev_arg_client);
-        send_stats_to_client (bev_client);
-
-        return;
+        return send_stats_to_client (client);
     }
-    /* read buffer 64kb */
-    bufferevent_setwatermark (bev_client, EV_READ, 0, INPUT_BUFFER_LIMIT);
+    /* no cdb files, classic redirector */
+    bev_arg_target = create_server_connection(bev_arg_client, destination, listener);
+    if (!bev_arg_target) {
+        fprintf(stderr, "nope\n");
+        uv_close((uv_handle_t *)bev_arg_client->stream, on_close);
+    }
+}
 
-    /* TARGET bev_arg */
-    /* parameter for callback functions */
+/* return bev_arg structure */
+/* after un/successfull connection on_outgoing_connection() will be called */
+struct bev_arg *create_server_connection(struct bev_arg *bev_arg_client, struct destination *destination, struct listener *listener)
+{
+    uv_stream_t *target;
+    uv_connect_t* connect;
+    struct bev_arg *bev_arg_target;
+
+    if (destination->s[0] == SOCKET_TCP) {
+        target = malloc (sizeof (uv_tcp_t));
+        uv_tcp_init(uv_default_loop(), (uv_tcp_t *)target);
+        connect = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+        uv_tcp_connect(connect, (uv_tcp_t *)target, (struct sockaddr *)&destination->sin, on_outgoing_connection);
+    } else {
+        target = malloc (sizeof (uv_pipe_t));
+        uv_pipe_init(uv_default_loop(), (uv_pipe_t *)target, 0);
+        connect = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+        uv_pipe_connect(connect, (uv_pipe_t *)target, destination->sun.sun_path, on_outgoing_connection);
+    }
+
     bev_arg_target = malloc (sizeof (struct bev_arg));
     bev_arg_target->type = BEV_TARGET;
     bev_arg_target->connecting = 0;
     bev_arg_target->connected = 0;
+    bev_arg_target->uv_closed = 0;
+    bev_arg_target->read_stopped = 0;
+    bev_arg_target->destination = destination;
+    bev_arg_target->failover_first_dst = destination;
 
     bev_arg_client->remote = bev_arg_target;
 
-    /* set callback functions and argument */
     bev_arg_target->listener = listener;
-    bev_arg_target->bev = bev_target;
+    bev_arg_target->stream = target;
     bev_arg_target->remote = bev_arg_client;
 
-    bev_arg_target->connect_timer = NULL;
-    bev_arg_target->read_timeout = 0;
+    bev_arg_target->read_timer = NULL;
 
+    /* mysql_stuff/postgresql_stuff structure is same for client and target bufferevent */
+    bev_arg_target->ms = bev_arg_client->ms;
 
-    if (!mysql_cdb_file && !postgresql_cdb_file) {
-        bufferevent_setcb (bev_target, read_callback, NULL, event_callback,
-                           (void *) bev_arg_target);
-    } else if (mysql_cdb_file) {
-        /* mysql_stuff structure is same for client and target bufferevent */
-        bev_arg_target->ms = bev_arg_client->ms;
+    connect->data = bev_arg_target;
+    target->data = bev_arg_target;
 
-        bufferevent_setcb (bev_target, mysql_read_callback, NULL,
-                           mysql_event_callback, (void *) bev_arg_target);
-    } else if (postgresql_cdb_file) {
-        /* mysql_stuff structure is same for client and target bufferevent */
-        bev_arg_target->ms = bev_arg_client->ms;
+    /* set connnect timeout timer */
+    bev_arg_target->connect_timer = malloc(sizeof(uv_timer_t));
+    uv_timer_init(uv_default_loop(), bev_arg_target->connect_timer);
+    bev_arg_target->connect_timer->data=bev_arg_target;
+    uv_timer_start(bev_arg_target->connect_timer, on_connect_timeout, connect_timeout * 1000, 0);
 
-        bufferevent_setcb (bev_target, postgresql_read_callback, NULL,
-                           postgresql_event_callback, (void *) bev_arg_target);
-
-    }
-    /* read buffer 64kb */
-    bufferevent_setwatermark (bev_target, EV_READ, 0, INPUT_BUFFER_LIMIT);
-
-    /* we can use cached init packet only if we can use MITM attack,
-     * we can use MITM attack only if we use mysql_cdb_file where are hashed user passwords
-     */
-    if (!postgresql_cdb_file && (!mysql_cdb_file || (mysql_cdb_file && !cache_mysql_init_packet))) {
-        if (destination->s[0] == SOCKET_TCP) {
-            s = (struct sockaddr *) &destination->sin;
-            len = destination->addrlen;
-        } else {
-            s = (struct sockaddr *) &destination->sun;
-            len = destination->addrlen;
-        }
-
-        bev_arg_target->connecting = 1;
-        bev_arg_target->destination = destination;
-        bev_arg_target->failover_first_dst = destination;
-
-        if (bufferevent_socket_connect (bev_target, s, len) == -1) {
-            logmsg ("bufferevent_socket_connect return -1 (full fd?)");
-            listener->nr_conn--;
-            bufferevent_free (bev_client);
-            bufferevent_free (bev_target);
-            free (bev_arg_client);
-            free (bev_arg_target);
-
-            return;
-        }
-        bev_arg_target->connecting = 0;
-        struct linger l;
-        int flag = 1;
-
-        l.l_onoff = 1;
-        l.l_linger = 0;
-
-        setsockopt (bufferevent_getfd (bev_target), SOL_SOCKET, SO_LINGER,
-                    (void *) &l, sizeof (l));
-        setsockopt (bufferevent_getfd (bev_target), IPPROTO_TCP, TCP_NODELAY,
-                    (char *) &flag, sizeof (int));
-
-        /* connect timeout timer */
-        struct timeval time;
-        time.tv_sec = connect_timeout;
-        time.tv_usec = 0;
-
-        bev_arg_target->connect_timer =
-            event_new (event_base, -1, 0, connect_timeout_cb, bev_arg_target);
-        if (bev_arg_target->connect_timer) {
-            event_add (bev_arg_target->connect_timer, &time);
-        }
-    } else if (postgresql_cdb_file) {
-        bev_arg_client->remote = NULL;
-        bev_arg_client->ms->not_need_remote = 1;
-        bev_arg_client->ms->handshake = 1;
-        bufferevent_free (bev_target);
-        free (bev_arg_target);
-        bufferevent_enable (bev_client, EV_READ);
-    } else {
-        /* use cached init packet */
-        bev_arg_client->remote = NULL;
-        bev_arg_client->ms->not_need_remote = 1;
-        bev_arg_client->ms->handshake = 1;
-        /* we use bev_arg_client and ms pointers as random data for generating random string filled in init packet send to client */
-        /* TODO: use better random input */
-        bev_arg_client->ms->scramble1 =
-            set_random_scramble_on_init_packet (cache_mysql_init_packet,
-                                                bev_arg_target,
-                                                bev_arg_client->ms);
-
-        bufferevent_free (bev_target);
-        free (bev_arg_target);
-
-        if (bufferevent_write
-            (bev_client, cache_mysql_init_packet,
-             cache_mysql_init_packet_len) == -1) {
-            listener->nr_conn--;
-            bufferevent_free (bev_client);
-            free (bev_arg_client);
-        }
-
-        bufferevent_enable (bev_client, EV_READ);
-    }
-}
-
-void
-cache_init_packet_from_server ()
-{
-    socklen_t len;
-    struct bufferevent *bev;
-    struct bev_arg *bev_arg;
-
-    struct destination *destination = first_destination;
-    struct sockaddr *s;
-
-    bev = bufferevent_socket_new (event_base, -1, BEV_OPT_CLOSE_ON_FREE);
-
-    bev_arg = malloc (sizeof (struct bev_arg));
-
-    bev_arg->type = BEV_CACHE;
-    bev_arg->bev = bev;
-    bev_arg->remote = NULL;
-    bev_arg->connect_timer = NULL;
-    bev_arg->read_timeout = 0;
-    bev_arg->destination = NULL;
-
-    /* set callback functions and argument */
-    bufferevent_setcb (bev, cache_mysql_init_packet_read_callback, NULL,
-                       cache_mysql_init_packet_event_callback,
-                       (void *) bev_arg);
-
-    /* read buffer 64kb */
-    bufferevent_setwatermark (bev, EV_READ, 0, INPUT_BUFFER_LIMIT);
-
-    if (destination->s[0] == SOCKET_TCP) {
-        s = (struct sockaddr *) &destination->sin;
-        len = destination->addrlen;
-    } else {
-        s = (struct sockaddr *) &destination->sun;
-        len = destination->addrlen;
-    }
-
-    /* event_callback() will be called after nonblock connect() return 
-     */
-    if (bufferevent_socket_connect (bev, s, len) == -1) {
-        logmsg ("bufferevent_socket_connect return -1 (full fd?)");
-        bufferevent_free (bev);
-        free (bev_arg);
-        return;
-    }
-
-    struct linger l;
-
-    l.l_onoff = 1;
-    l.l_linger = 0;
-
-    setsockopt (bufferevent_getfd (bev), SOL_SOCKET, SO_LINGER, (void *) &l,
-                sizeof (l));
-
-    /* connect timeout timer */
-    struct timeval time;
-    time.tv_sec = connect_timeout;
-    time.tv_usec = 0;
-
-    bev_arg->connect_timer =
-        event_new (event_base, -1, 0, connect_timeout_cb, bev_arg);
-    if (bev_arg->connect_timer) {
-        event_add (bev_arg->connect_timer, &time);
-    }
-}
-
-void
-log_cb ()
-{
-}
-
-void failover(struct bev_arg *bev_arg_target) {
-    struct sockaddr *s = NULL;
-    socklen_t len;
-
-    struct destination *destination = NULL;
-    struct bufferevent *bev_client = bev_arg_target->remote->bev, *bev_target;
-    struct bev_arg *bev_arg_client = bev_arg_target->remote;
-
-    if (mode==MODE_FAILOVER || mode==MODE_FAILOVER_R) {
-        if (bev_arg_target->destination->next) {
-            destination = bev_arg_target->destination->next;
-        } else {
-            /* we tried all destinations */
-            logmsg ("we tried all destinations");
-            bev_arg_client->listener->nr_conn--;
-            bufferevent_free (bev_client);
-            free (bev_arg_client);
-            free (bev_arg_target);
-
-            return;
-        }
-    } else if (mode==MODE_FAILOVER_RR) {
-        if (destination_rr == NULL) {
-            destination = destination_rr = first_destination;
-        } else {
-            if (destination_rr->next) {
-                destination = destination_rr = destination_rr->next;
-            } else {
-                destination = destination_rr = first_destination;
-            }
-        }
-    }
-
-    if (destination == bev_arg_target->failover_first_dst) {
-        /* we tried all destinations */
-        logmsg ("we tried all destinations");
-        bev_arg_client->listener->nr_conn--;
-        bufferevent_free (bev_client);
-        free (bev_arg_client);
-        free (bev_arg_target);
-
-        return;
-    }
-
-    bev_arg_target->destination=destination;
-
-    bev_target =
-        bufferevent_socket_new (event_base, -1, BEV_OPT_CLOSE_ON_FREE);
-    bev_arg_target->bev = bev_target;
-
-    bufferevent_setcb (bev_target, read_callback, NULL, event_callback,
-                       (void *) bev_arg_target);
-
-
-    /* read buffer 64kb */
-    bufferevent_setwatermark (bev_target, EV_READ, 0, INPUT_BUFFER_LIMIT);
-
-    logmsg ("reconnect to %s", destination->s);
-    if (destination->s[0] == SOCKET_TCP) {
-        s = (struct sockaddr *) &destination->sin;
-        len = destination->addrlen;
-    } else {
-        s = (struct sockaddr *) &destination->sun;
-        len = destination->addrlen;
-    }
-
-
-    bev_arg_target->connecting = 1;
-    if (bufferevent_socket_connect (bev_target, s, len) == -1) {
-        logmsg ("bufferevent_socket_connect return -1 (full fd?)");
-        bev_arg_client->listener->nr_conn--;
-        bufferevent_free (bev_client);
-        bufferevent_free (bev_target);
-        free (bev_arg_client);
-        free (bev_arg_target);
-
-        return;
-    }
-    bev_arg_target->connecting = 0;
-
-    struct linger l;
-    int flag = 1;
-
-    l.l_onoff = 1;
-    l.l_linger = 0;
-
-    setsockopt (bufferevent_getfd (bev_target), SOL_SOCKET, SO_LINGER,
-                (void *) &l, sizeof (l));
-    setsockopt (bufferevent_getfd (bev_target), IPPROTO_TCP, TCP_NODELAY,
-                (char *) &flag, sizeof (int));
-
-    /* connect timeout timer */
-    struct timeval time;
-    time.tv_sec = connect_timeout;
-    time.tv_usec = 0;
-
-    bev_arg_target->connect_timer =
-        event_new (event_base, -1, 0, connect_timeout_cb, bev_arg_target);
-    if (bev_arg_target->connect_timer) {
-        event_add (bev_arg_target->connect_timer, &time);
-    }
+    return bev_arg_target;
 }

@@ -1,7 +1,6 @@
 #include "rum.h"
 
-extern struct event_base *event_base;
-extern int mode;
+extern bufpool_t *pool;
 
 extern int connect_timeout;
 extern int read_timeout;
@@ -17,241 +16,89 @@ extern int server_keepidle;
 extern int server_keepintvl;
 
 
-/*
- * if some data are in input buffer, copy it to remote bufferevent output buffer
- */
 void
-read_callback (struct bufferevent *bev, void *ptr)
+on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 {
-    struct bev_arg *bev_arg = ptr;
-    size_t len;
+    struct bev_arg *bev_arg = stream->data;
+    int r;
+    uv_stream_t *remote_stream;
 
-    /* if remote bufferevent exist */
+
+    /* disable read timeout from server when we receive first data */
+    if (bev_arg->read_timer) {
+        uv_timer_stop(bev_arg->read_timer);
+        uv_close((uv_handle_t *)bev_arg->read_timer, on_close_timer);
+        bev_arg->read_timer = NULL;
+    }
+
+    /* if remote stream exist */
     if (bev_arg->remote) {
-        struct bufferevent *bev_remote = bev_arg->remote->bev;
-
-        /* update stats */
-        len = evbuffer_get_length (bufferevent_get_input (bev));
-        if (len) {
+        /* if read return some data */
+        if (nread > 0) {
             /* update stats */
             if (bev_arg->type == BEV_CLIENT) {
-                bev_arg->listener->input_bytes += len;
+                bev_arg->listener->input_bytes += nread;
             } else if (bev_arg->type == BEV_TARGET) {
-                bev_arg->listener->output_bytes += len;
-                /* disable read timeout from server when we receive first data */
-                if (bev_arg->read_timeout) {
-                    bufferevent_set_timeouts (bev, NULL, NULL);
-                    bev_arg->read_timeout = 0;
-                }
-            }
-        }
-
-        /* write data from our intput buffer to remote output buffer */
-        if (evbuffer_remove_buffer (bufferevent_get_input(bev), bufferevent_get_output(bev_remote), len)
-            == -1) {
-            /* if error, close our socket, remote socket and free everything */
-            bev_arg->listener->nr_conn--;
-
-            bufferevent_free (bev);
-            bufferevent_free (bev_remote);
-            free (bev_arg->remote);
-            free (bev_arg);
-
-            return;
-        }
-
-        /* If remote bufferevent has more data than OUTPUT_BUFFER_LIMIT 
-         * disable EV_READ on our bev and enable write_callback on remote bev.
-         * We enable EV_READ again when all data on remote socket buffer are written,
-         * this is done in write_callback() when remote socket write event is triggered.
-         */
-        if (evbuffer_get_length (bufferevent_get_output (bev_remote)) >=
-            OUTPUT_BUFFER_LIMIT) {
-            bufferevent_disable (bev, EV_READ);
-            bufferevent_setcb (bev_remote, read_callback, write_callback,
-                               event_callback, (void *) bev_arg->remote);
-        }
-    } else {
-        /* remote socket is closed, free self */
-        bev_arg->listener->nr_conn--;
-
-        bufferevent_free (bev);
-        free (bev_arg);
-    }
-}
-
-/* if data are sent from output buffer of bev, this function is called,
- * it is not active all the time, but only in some situations (bev has too many data in output buffer)
- * we can find out if all data are written to network and free memory
- */
-void
-write_callback (struct bufferevent *bev, void *ptr)
-{
-    struct bev_arg *bev_arg = ptr;
-
-    /* if bufferevent send all data to socket */
-    if (evbuffer_get_length (bufferevent_get_output (bev)) == 0) {
-        /* if remote socket exist */
-        if (bev_arg->remote) {
-            /*
-             * now enable EV_READ on remote socket bufferevent so we can receive data from it
-             * and disable write_callback fn for self
-             */
-            struct bufferevent *bev_remote = bev_arg->remote->bev;
-
-            bufferevent_enable (bev_remote, EV_READ);
-            bufferevent_setcb (bev, read_callback, NULL, event_callback,
-                               (void *) bev_arg);
-        } else {
-            /* if remote socket is closed and we dont have any data in output buffer, free self */
-            bev_arg->listener->nr_conn--;
-
-            bufferevent_free (bev);
-            free (bev_arg);
-        }
-    }
-}
-
-void
-event_callback (struct bufferevent *bev, short events, void *ptr)
-{
-    struct bev_arg *bev_arg = ptr;
-//    struct bufferevent *bev_target;
-
-    /* if remote socket exist */
-    if (bev_arg->remote) {
-        struct bufferevent *bev_remote = bev_arg->remote->bev;
-
-        /* connection to remote host is successful, enable EV_READ */
-        if (events & BEV_EVENT_CONNECTED) {
-            if (bev_arg->connect_timer) {
-                event_free (bev_arg->connect_timer);
-                bev_arg->connect_timer = NULL;
-            }
-            bev_arg->connected=1;
-
-            if (server_keepalive) {
-                setsockopt(bufferevent_getfd(bev), SOL_SOCKET, SO_KEEPALIVE, &server_keepalive, sizeof(server_keepalive));
-
-                if (server_keepcnt) {
-                    setsockopt(bufferevent_getfd(bev), SOL_TCP, TCP_KEEPCNT, &server_keepcnt, sizeof(server_keepcnt));
-                }
-                if (server_keepidle) {
-                    setsockopt(bufferevent_getfd(bev), SOL_TCP, TCP_KEEPIDLE, &server_keepidle, sizeof(server_keepidle));
-                }
-                if (server_keepintvl) {
-                    setsockopt(bufferevent_getfd(bev), SOL_TCP, TCP_KEEPINTVL, &server_keepintvl, sizeof(server_keepintvl));
-                }
+                bev_arg->listener->output_bytes += nread;
             }
 
-            bufferevent_enable (bev, EV_READ);
-            bufferevent_enable (bev_remote, EV_READ);
 
-            /* setup read timeout for connection from target server */
-            if (read_timeout) {
-                struct timeval time;
-                time.tv_sec = read_timeout;
-                time.tv_usec = 0;
-                bufferevent_set_timeouts (bev, &time, NULL);
-                bev_arg->read_timeout = 1;
-            }
-            /* error or eof */
-        } else if (events &
-                   (BEV_EVENT_ERROR | BEV_EVENT_EOF | BEV_EVENT_TIMEOUT)) {
-            if (bev_arg->type == BEV_TARGET) {
-                if (events & BEV_EVENT_ERROR) {
-                    logmsg ("BEV_EVENT_ERROR (default_callback) dest: %s error: %s", bev_arg->destination->s, evutil_socket_error_to_string(evutil_socket_geterror(bufferevent_getfd(bev))));
-                } else if (events & BEV_EVENT_TIMEOUT) {
-                    logmsg ("BEV_EVENT_TIMEOUT dest: %s", bev_arg->destination->s);
+            /* send data to remote stream */
+            uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+            uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
+
+
+            newbuf->base = buf->base;
+            newbuf->len = nread;
+
+            req->data = newbuf;
+            remote_stream = bev_arg->remote->stream;
+            r = uv_write(req, remote_stream, newbuf, 1, on_write);
+            if (r) {
+                fprintf(stderr,"on_read(): uv_write() failed: %s\n", uv_strerror(r));
+                //logmsg ("on_read(): uv_write() failed");
+                bufpool_release(buf->base);
+                free(newbuf);
+                free(req);
+
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                if (uv_shutdown(shutdown, stream, on_shutdown)) {
+                    free(shutdown);
                 }
 
-            }
-
-            if (bev_arg->connect_timer) {
-                event_free (bev_arg->connect_timer);
-                bev_arg->connect_timer = NULL;
-            }
-
-            if (bev_arg->connecting) {
-                /* this code is called from another event function, return immediately and dont free anything 
-                 * this is probably a bug in libevent, in evbuffer_socket_connect() when connect() fail event_callback is directly called
-                 */
                 return;
             }
-            bufferevent_free (bev);
 
-            /* failover */
-            if (bev_arg->type==BEV_TARGET && !bev_arg->connected && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR || mode == MODE_FAILOVER_R) && (events & (BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT))) {
-                if (bev_arg->connect_timer) {
-                    event_free (bev_arg->connect_timer);
-                    bev_arg->connect_timer = NULL;
-                }
 
-                return failover(bev_arg);
+            if (remote_stream->write_queue_size > 0) {
+                /* disable reading on input socket */
+                fprintf(stderr, "stopping read\n");
+                bev_arg->remote->read_stopped=1;
+                uv_read_stop(stream);
             }
-
-            /* if remote socket doesnt have any data in output buffer, free structures and close it */
-            if (evbuffer_get_length (bufferevent_get_output (bev_remote)) == 0) {
-                bufferevent_free (bev_remote);
-                free (bev_arg->remote);
-
-                bev_arg->listener->nr_conn--;
-            } else {
-                /* if remote socket has still some data in output buffer dont close it
-                 * but enable write_callback, it will free self when write all data
-                 */
-                bev_arg->remote->remote = NULL;
-                bufferevent_setcb (bev_remote, read_callback, write_callback,
-                                   event_callback, (void *) bev_arg->remote);
-            }
-
-            free (bev_arg);
+            return;
+        } else if (nread == 0) {
+            fprintf(stderr, "nread = 0\n");
+            bufpool_release(buf->base);
+            return;
         } else {
-            logmsg ("unknown events: %d", events);
+            fprintf(stderr, "nread = %d\n", nread);
+            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+
+            if (uv_shutdown(shutdown, stream, on_shutdown)) {
+                free(shutdown);
+            }
+
+
         }
     } else {
-        logmsg ("remote socket doesnt exist ?");
-
-        if (bev_arg->connect_timer) {
-            event_free (bev_arg->connect_timer);
-            bev_arg->connect_timer = NULL;
+        /* remote stream doesn't exist, free self */
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+ 
+        if (uv_shutdown(shutdown, stream, on_shutdown)) {
+            free(shutdown);
         }
 
-        bufferevent_free (bev);
-
-        /* if remote socket doesnt exist, free self and close socket */
-        bev_arg->listener->nr_conn--;
-        free (bev_arg);
     }
-}
-
-void
-connect_timeout_cb (evutil_socket_t fd, short what, void *arg)
-{
-    struct bev_arg *bev_arg = arg;
-
-    if (bev_arg->destination) {
-        logmsg ("connection timeout to %s", bev_arg->destination->s);
-    } else {
-        logmsg ("connection timeout to unknown");
-    }
-
-    if (bev_arg->connect_timer) {
-        event_free (bev_arg->connect_timer);
-        bev_arg->connect_timer = NULL;
-    }
-
-    /* failover */
-    if (bev_arg->type==BEV_TARGET && (mode == MODE_FAILOVER || mode == MODE_FAILOVER_RR || mode == MODE_FAILOVER_R)) {
-        bufferevent_free(bev_arg->bev);
-        return failover(bev_arg);
-    }
-
-    if (bev_arg->remote) {
-        bufferevent_free (bev_arg->remote->bev);
-        free (bev_arg->remote);
-    }
-
-    bufferevent_free (bev_arg->bev);
-    free (bev_arg);
+    bufpool_release(buf->base);
 }

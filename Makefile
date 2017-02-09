@@ -1,33 +1,33 @@
 CC=gcc
 LD=ld
 
-LIBEVENT_DIR=libevent-release-2.1.8-stable
+LIBUV_DIR=libuv-1.11.0
 
 #LDFLAGS=-flto
-LDLIBS=-L ${LIBEVENT_DIR}/.libs -lrt -lcdb -lm
-#CFLAGS=-Wall -O2 -flto -g -I ${LIBEVENT_DIR}/include
-CFLAGS=-Wall -O2 -march=sandybridge -flto -g -I ${LIBEVENT_DIR}/include
-LDFLAGS=-Wall -O2 -march=sandybridge -flto -g
+LDLIBS=-L ${LIBUV_DIR}/.libs -lrt -lcdb -lm -lpthread -ldl
+#CFLAGS=-Wall -O2 -flto -g -I ${LIBUV_DIR}/include
+CFLAGS=-Wall -march=sandybridge -Ofast -flto -g -I ${LIBUV_DIR}/include
+LDFLAGS=-Wall -march=sandybridge -Ofast -flto -fuse-linker-plugin -g
 
+all: ${LIBUV_DIR}/.libs/libuv.a rum 
 
-all: ${LIBEVENT_DIR}/.libs/libevent.a rum 
-
-rum: rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats_callback.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o parse_arg.o mysql_password/sha1.o mysql_password.o
-	$(CC) $(LDFLAGS) rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats_callback.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o mysql_password/sha1.o mysql_password.o parse_arg.o $(LDLIBS) -o rum ${LIBEVENT_DIR}/.libs/libevent.a
+rum: rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats_callback.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o parse_arg.o mysql_password/sha1.o mysql_password.o bufpool.o
+	$(CC) $(LDFLAGS) rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats_callback.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o mysql_password/sha1.o mysql_password.o parse_arg.o bufpool.o -o rum ${LIBUV_DIR}/.libs/libuv.a $(LDLIBS)
+#	$(CC) $(LDFLAGS) rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats_callback.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o mysql_password/sha1.o mysql_password.o parse_arg.o bufpool.o -o rum ${LIBUV_DIR}/.libs/libuv.a jemalloc-4.4.0/lib/libjemalloc.a $(LDLIBS)
 	#strip rum
 
-${LIBEVENT_DIR}/.libs/libevent.a:
-	-$(shell echo 'compiling libevent, wait' >&2)
-	-$(shell echo 'cd $(LIBEVENT_DIR); AR=gcc-ar RANLIB=gcc-ranlib CFLAGS="-O2 -flto -fno-fat-lto-objects -march=sandybridge" LDFLAGS="-O2 -flto -fno-fat-lto-objects -march=sandybridge"./configure --disable-shared --enable-static --disable-openssl --disable-debug-mode; make clean; make' >&2)
-	-$(shell cd $(LIBEVENT_DIR); AR=gcc-ar RANLIB=gcc-ranlib CFLAGS="-O2 -flto -fno-fat-lto-objects -march=sandybridge" LDFLAGS="-O2 -flto -fno-fat-lto-objects -march=sandybridge" ./configure --disable-shared --enable-static --disable-openssl --disable-debug-mode; make clean; make)
+${LIBUV_DIR}/.libs/libuv.a:
+	-$(shell echo 'compiling libuv, wait' >&2)
+	-$(shell echo 'cd $(LIBUV_DIR); AR=gcc-ar RANLIB=gcc-ranlib CFLAGS="-Ofast -flto -fno-fat-lto-objects -march=sandybridge" LDFLAGS="-Ofast -fno-strict-aliasing -flto -fno-fat-lto-objects -march=sandybridge" ./configure --disable-shared --enable-static; make clean; make' >&2)
+	-$(shell cd $(LIBUV_DIR); AR=gcc-ar RANLIB=gcc-ranlib CFLAGS="-Ofast -flto -fno-fat-lto-objects -march=sandybridge" LDFLAGS="-Ofast -flto -fno-fat-lto-objects -march=sandybridge" ./configure --disable-shared --enable-static ; make clean; make)
 
-.PHONY : clean cleanlibevent
+.PHONY : clean cleanlibuv
 
 clean: cleanrum
-cleanall: cleanrum cleanlibevent
+cleanall: cleanrum cleanlibuv
 
 cleanrum:
 	-rm rum *.o mysql_password/*.o
 
-cleanlibevent:
-	-make -C ${LIBEVENT_DIR} clean
+cleanlibuv:
+	-make -C ${LIBUV_DIR} clean

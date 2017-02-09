@@ -3,7 +3,8 @@
 /* some global variables */
 struct listener *first_listener;
 struct destination *first_destination = NULL;
-struct event_base *event_base;
+
+bufpool_t *pool;
 
 extern char *mysql_cdb_file;
 extern char *postgresql_cdb_file;
@@ -23,6 +24,11 @@ int server_keepcnt = 0;
 int server_keepidle = 0;
 int server_keepintvl = 0;
 
+void signal_handler(uv_signal_t *handle, int signum)
+{
+    uv_stop(uv_default_loop());
+}
+
 
 int
 main (int ac, char *av[])
@@ -31,6 +37,8 @@ main (int ac, char *av[])
     char *logfile = NULL;
     int i;
     char *tmp,*ptr;
+    uv_signal_t *sigint;
+    uv_signal_t *sigterm;
 
     struct destination *destination = NULL;
     struct listener *listener;
@@ -59,6 +67,24 @@ main (int ac, char *av[])
             strcat(logstring, " ");
         }
     }
+
+    pool =  malloc(sizeof(*pool));
+
+    bufpool_init(pool, 64000);
+
+/*
+    uv_timer_t *handle;
+    handle = malloc (sizeof(uv_timer_t));
+    uv_timer_init(loop,handle);
+    uv_timer_start(handle, bufpool_print_stats, 1000, 1000);
+*/
+
+    sigint = malloc(sizeof(uv_signal_t));
+    sigterm = malloc(sizeof(uv_signal_t));
+    uv_signal_init(uv_default_loop(), sigint);
+    uv_signal_init(uv_default_loop(), sigterm);
+    uv_signal_start(sigint, signal_handler, SIGINT);
+    uv_signal_start(sigterm, signal_handler, SIGTERM);
 
     openlog("rum", LOG_NDELAY|LOG_PID, LOG_DAEMON);
 
@@ -103,15 +129,8 @@ main (int ac, char *av[])
 
 
     while ((ch = getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:", long_options, &option_index)) != -1) {
-//    while ((ch = getopt (ac, av, "bd:s:m:l:M:P:t:r:f:")) != -1) {
         switch (ch) {
         case 0:
-/*
-            printf("option %s", long_options[option_index].name);
-            if (optarg)
-                printf(" with arg %s", optarg);
-            printf("\n");
-*/
             if (strcmp(long_options[option_index].name,"read-timeout") == 0)
                 read_timeout = atoi(optarg);
             if (strcmp(long_options[option_index].name,"connect-timeout") == 0)
@@ -146,7 +165,7 @@ main (int ac, char *av[])
                 listener = listener->next;
             }
             listener->s = strdup (optarg);
-            listener->fd = create_listen_socket (optarg);
+            listener->stream = create_listen_socket (optarg);
             listener->next = NULL;
             /* vynulujeme statistiky */
             listener->nr_conn = 0;
@@ -241,9 +260,6 @@ main (int ac, char *av[])
         }
     }
 
-    event_base = event_base_new ();
-//    event_enable_debug_logging(EVENT_DBG_ALL);
-
     /* if mysql module is enabled, open cdb file and create EV_SIGNAL event which call repoen_cdb().
      * if someone send SIGUSR1 cdb file is reopened, but this is automatically triggered by timeout with
      * CDB_RELOAD_TIME seconds (default 2s)
@@ -286,17 +302,45 @@ main (int ac, char *av[])
 
     /* add all listen (-s -m) ports to event_base, if someone connect: accept_connect is executed with struct listener argument */
     for (listener = first_listener; listener; listener = listener->next) {
-        struct event *ev;
+        listener->stream->data = listener;
+        int r = uv_listen((uv_stream_t *)listener->stream, -1, on_incoming_connection);
 
-        ev = event_new (event_base, listener->fd, EV_READ | EV_PERSIST,
-                        accept_connect, listener);
-        event_add (ev, NULL);
+        if (r) {
+            /* error */
+            fprintf(stderr, "listen failed\n");
+            exit (1);
+        }
     }
 
     /* main libevent loop */
-    event_base_loop (event_base, 0);
+    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-    usage ();
+    /* SIGINT || SIGTERM received, clean up */
+    bufpool_done(pool);
+    free(pool);
+
+    if (mysql_cdb_file) {
+        free (mysql_cdb_file);
+    }
+
+    if (postgresql_cdb_file) {
+        free (postgresql_cdb_file);
+    }
+
+
+    struct destination *dst;
+    dst = first_destination;
+    while (dst) {
+        destination = dst->next;
+        free(dst->s);
+        free(dst);
+        dst = destination;
+    }
+
+    free(sigint);
+    free(sigterm);
+
+//    usage ();
 
     exit (0);
 }

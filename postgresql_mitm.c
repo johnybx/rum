@@ -9,8 +9,7 @@ extern int read_timeout;
 
 int
 pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
-                                struct bufferevent *bev, int len,
-                                struct bufferevent *bev_remote)
+                                const uv_buf_t *uv_buf, size_t nread)
 {
     char user[64];
     char buf[512];
@@ -19,28 +18,38 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     char buf3[512];
     char buf4[512];
     int user_len, buflen, buflen_htonl, buf1len, buf2len, buf3len, buf4len;
-    struct bev_arg *bev_arg_remote;
     struct destination *destination = NULL, *dst;
     char *pg_server = NULL, *userptr;
+    struct bev_arg *bev_arg_remote;
 
-    if (len < 2*sizeof(int) + sizeof("user")) {
+    if (nread < 2*sizeof(int) + sizeof("user")) {
         /* check if it is SSLRequest */
-        if (len == 8) {
+        if (nread == 8) {
             char bufx[8];
             char *ptr=bufx;
             int *a,*b;
 
-            evbuffer_copyout (bufferevent_get_input (bev),
-                          bufx, len);
-
-            evbuffer_drain (bufferevent_get_input (bev), len);
+            memcpy(bufx, uv_buf->base, nread);
 
             a=(int *)ptr;
             b=(int *)(ptr+sizeof(int));
 
             if (ntohl(*a) == 8 && ntohl(*b) == 80877103) {
                 /* send client that we dont support SSL */
-                bufferevent_write (bev, "N", 1);
+                uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+                uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
+                newbuf->base = malloc (1);
+                newbuf->base[0]='N';
+                newbuf->len=1;
+                req->data = newbuf;
+                if (uv_write(req, bev_arg->stream, newbuf, 1, on_write)) {
+                    uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                    if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+                        free(shutdown);
+                        uv_close((uv_handle_t *)bev_arg->stream, on_close);
+                    }
+                }
+
                 return 1;
             }
         }
@@ -52,42 +61,28 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
 
         if (bev_arg->remote) {
             bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
             free (bev_arg->remote);
         }
 
-        bufferevent_free (bev);
         free (bev_arg);
 
         return 1;
     }
 
-    bev_arg->ms->client_auth_packet = malloc (len);
-    bev_arg->ms->client_auth_packet_len = len;
-
-    evbuffer_copyout (bufferevent_get_input (bev),
-                      bev_arg->ms->client_auth_packet, len);
-    evbuffer_drain (bufferevent_get_input (bev), len);
+    bev_arg->ms->client_auth_packet_len = nread;
+    bev_arg->ms->client_auth_packet = malloc(nread);
+    memcpy(bev_arg->ms->client_auth_packet, uv_buf->base, nread);
 
     userptr =
         bev_arg->ms->client_auth_packet + 2 * sizeof(int) +
         sizeof("user");
-    user_len = strnlen (userptr, len - 2*sizeof(int) - sizeof("user"));
+    user_len = strnlen (userptr, nread - 2*sizeof(int) - sizeof("user"));
     if (user_len > sizeof(user)-1) {
-        bev_arg->listener->nr_conn--;
-
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
-            free (bev_arg->remote);
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
+            uv_close((uv_handle_t *)bev_arg->stream, on_close);
         }
-
-        bufferevent_free (bev);
-        free (bev_arg);
-
         return 1;
     }
     strncpy (user,
@@ -137,11 +132,14 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
         memcpy (buf + 1 + 4 + buf1len + 1, buf2, buf2len);
         memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1, buf3, buf3len);
         memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1 + buf3len + 1, buf4, buf4len);
-        bufferevent_write (bev, buf, buflen);
+        //bufferevent_write (bev, buf, buflen);
+        // TODO
 
         /* enable write_callback so we close connection in case client doesn't */
+/*
         bufferevent_setcb (bev, postgresql_read_callback, postgresql_write_callback,
                            postgresql_event_callback, (void *) bev_arg);
+*/
 
         if (pg_server)
             free (pg_server);
@@ -151,141 +149,32 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
 
     /* if remote connection exists free it */
     if (bev_arg->remote) {
-        bufferevent_free (bev_arg->remote->bev);
+//        bufferevent_free (bev_arg->remote->bev);
         free (bev_arg->remote);
     }
 
-    bev_remote =
-        bufferevent_socket_new (event_base, -1, BEV_OPT_CLOSE_ON_FREE);
-
-    if (!bev_remote || !destination) {
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-        bufferevent_free (bev);
-        free (bev_arg);
+    if (!destination) {
         if (pg_server)
             free (pg_server);
+
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
+            uv_close((uv_handle_t *)bev_arg->stream, on_close);
+        }
 
         return 1;
     }
 
-    bev_arg_remote = malloc (sizeof (struct bev_arg));
 
-    bev_arg_remote->bev = bev_remote;
-
-    bev_arg->remote = bev_arg_remote;
-    bev_arg_remote->remote = bev_arg;
+    bev_arg_remote = create_server_connection(bev_arg, destination, bev_arg->listener);
     bev_arg->ms->not_need_remote = 0;
-
-    bev_arg_remote->type = BEV_TARGET;
-
     bev_arg_remote->ms = bev_arg->ms;
     bev_arg_remote->listener = bev_arg->listener;
-
     bev_arg->ms->handshake = 2;
-
-    bev_arg_remote->read_timeout = 0;
-
-    bev_arg_remote->connecting = 0;
-
-    bufferevent_setcb (bev_remote, postgresql_read_callback, NULL,
-                       postgresql_event_callback, (void *) bev_arg_remote);
-
-    bufferevent_disable (bev, EV_READ);
-
-    bufferevent_setwatermark (bev_remote, EV_READ, 0, INPUT_BUFFER_LIMIT);
-    bev_arg_remote->connecting = 1;
-    bev_arg_remote->destination = destination;
-
-    if (bufferevent_socket_connect
-        (bev_remote, (struct sockaddr *) &destination->sin,
-         destination->addrlen) == -1) {
-        logmsg ("bufferevent_socket_connect return -1 (full fd?)");
-        /* this if is needed here, because if connect() fails libevent will call mysql_event_callback
-         * immediately, and not from main event loop. so bev_arg->ms can be already freed
-         */
-
-        if (bev_arg->ms) {
-            free_ms (bev_arg->ms);
-            bev_arg->ms = NULL;
-        }
-
-        if (bev_arg->remote) {
-            bufferevent_free (bev_arg->remote->bev);
-            bev_arg->remote->ms = NULL;
-            free (bev_arg->remote);
-        }
-
-        bufferevent_free (bev);
-        free (bev_arg);
-
-        if (pg_server)
-            free (pg_server);
-
-        return 1;
-    }
-    bev_arg_remote->connecting = 0;
-    struct linger l;
-    int flag = 1;
-
-    l.l_onoff = 1;
-    l.l_linger = 0;
-    setsockopt (bufferevent_getfd (bev_remote), SOL_SOCKET, SO_LINGER,
-                (void *) &l, sizeof (l));
-    setsockopt (bufferevent_getfd (bev_remote), IPPROTO_TCP, TCP_NODELAY,
-                (char *) &flag, sizeof (int));
 
     if (pg_server)
         free (pg_server);
-
-    /* connect timeout timer */
-    struct timeval time;
-    time.tv_sec = connect_timeout;
-    time.tv_usec = 0;
-
-    bev_arg_remote->connect_timer =
-        event_new (event_base, -1, 0, postgresql_connect_timeout_cb,
-                   bev_arg_remote);
-    if (bev_arg_remote->connect_timer) {
-        event_add (bev_arg_remote->connect_timer, &time);
-    }
-
-    return 1;
-}
-
-int
-pg_handle_auth_with_server (struct bev_arg *bev_arg, struct bufferevent *bev,
-                         struct bufferevent *bev_remote)
-{
-    if (bufferevent_write
-        (bev, bev_arg->ms->client_auth_packet,
-         bev_arg->ms->client_auth_packet_len) == -1) {
-        bev_arg->listener->nr_conn--;
-
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
-            free (bev_arg->remote);
-        }
-
-        bufferevent_free (bev);
-        free (bev_arg);
-
-        return 1;
-    }
-
-    free_ms (bev_arg->ms);
-    bev_arg->ms = NULL;
-    bev_arg->remote->ms = NULL;
-
-    bufferevent_setcb (bev, read_callback, NULL, event_callback,
-                       (void *) bev_arg);
-    bufferevent_setcb (bev_remote, read_callback, NULL, event_callback,
-                       (void *) bev_arg->remote);
-
-    bufferevent_enable (bev_remote, EV_READ);
 
     return 1;
 }

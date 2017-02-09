@@ -5,6 +5,7 @@
 #include "mysql_password/sha1.h"
 
 extern struct event_base *event_base;
+extern bufpool_t *pool;
 
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
@@ -98,8 +99,15 @@ get_scramble_from_init_packet (char *packet, size_t len)
     char *p;
     char *scramble;
 
+    fprintf(stderr,"x %d\n",len);
+
+    if (len < MYSQL_PACKET_HEADER_SIZE + 1) {
+        return NULL;
+    }
+
     p = packet + MYSQL_PACKET_HEADER_SIZE + 1;
 
+    // TODO: buffer overflow
     while (*p != '\0')
         p++;
     p += 1 + 4;
@@ -148,39 +156,26 @@ set_random_scramble_on_init_packet (char *packet, void *p1, void *p2)
 
 int
 handle_init_packet_from_server (struct bev_arg *bev_arg,
-                                struct bufferevent *bev, int len,
-                                struct bufferevent *bev_remote)
+                                const uv_buf_t *uv_buf, size_t nread)
 {
     char mysql_server_init_packet[4096];
     bev_arg->ms->handshake = 1;
 
     /* paket too small or too big */
-    if (len < MYSQL_PACKET_HEADER_SIZE + MYSQL_INIT_PACKET_MIN_SIZE ||
-        len > sizeof (mysql_server_init_packet)) {
+    if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_INIT_PACKET_MIN_SIZE ||
+        nread > sizeof (mysql_server_init_packet)) {
 
-        bev_arg->listener->nr_conn--;
-
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
-            free (bev_arg->remote);
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
         }
 
-        bufferevent_free (bev);
-        free (bev_arg);
         return 1;
     }
 
-    /* copy data from server (bev) to mysql_server_init_packet_variable */
-    evbuffer_copyout (bufferevent_get_input (bev), mysql_server_init_packet,
-                      len);
-
     /* get scramble into shared struct mysql_mitm between our socket and client socket */
     bev_arg->ms->scramble1 =
-        get_scramble_from_init_packet (mysql_server_init_packet, len);
+        get_scramble_from_init_packet (uv_buf->base, nread);
 
     return 0;
 }
@@ -188,8 +183,7 @@ handle_init_packet_from_server (struct bev_arg *bev_arg,
 
 int
 handle_auth_packet_from_client (struct bev_arg *bev_arg,
-                                struct bufferevent *bev, int len,
-                                struct bufferevent *bev_remote)
+                                const uv_buf_t *uv_buf, size_t nread)
 {
     char user[64];
     char buf[512];
@@ -199,51 +193,33 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
     char *mysql_server = NULL, *c, *i, *userptr;
 
     /* check if size ends in user[1], so user has at least 1 char */
-    if (len < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1) {
+    if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1) {
         bev_arg->listener->nr_conn--;
-
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
-            free (bev_arg->remote);
+        
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
         }
-
-        bufferevent_free (bev);
-        free (bev_arg);
 
         logmsg("invalid client packet size (packet too small)");
         return 1;
     }
 
-    bev_arg->ms->client_auth_packet = malloc (len);
-    bev_arg->ms->client_auth_packet_len = len;
-
-    evbuffer_copyout (bufferevent_get_input (bev),
-                      bev_arg->ms->client_auth_packet, len);
-    evbuffer_drain (bufferevent_get_input (bev), len);
+    bev_arg->ms->client_auth_packet_len = nread;
+    bev_arg->ms->client_auth_packet = malloc (nread);
+    memcpy(bev_arg->ms->client_auth_packet, uv_buf->base, nread);
 
     userptr =
         bev_arg->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS;
     /* limit strnlen to packet length without HEADER */
-    user_len = strnlen (userptr, len - MYSQL_PACKET_HEADER_SIZE - MYSQL_AUTH_PACKET_USER_POS);
+    user_len = strnlen (userptr, nread - MYSQL_PACKET_HEADER_SIZE - MYSQL_AUTH_PACKET_USER_POS);
     if (user_len > sizeof(user)-1) {
-        bev_arg->listener->nr_conn--;
-
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
-            free (bev_arg->remote);
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
         }
 
-        bufferevent_free (bev);
-        free (bev_arg);
         logmsg("invalid client packet size (user_len > sizeof(user)-1)");
 
         return 1;
@@ -264,20 +240,12 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
     *
     * we dont support other types of auth
     */
-    if (len < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1 + user_len + 1 + SCRAMBLE_LENGTH) {
-        bev_arg->listener->nr_conn--;
-
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
-            free (bev_arg->remote);
+    if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1 + user_len + 1 + SCRAMBLE_LENGTH) {
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
         }
 
-        bufferevent_free (bev);
-        free (bev_arg);
         logmsg("invalid client packet size (packet too small 2)");
 
         return 1;
@@ -328,11 +296,28 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
         memcpy (buf, ERR_LOGIN_PACKET_PREFIX, sizeof(ERR_LOGIN_PACKET_PREFIX));
         buflen = snprintf (buf + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1, sizeof(buf) - sizeof(ERR_LOGIN_PACKET_PREFIX), "Access denied, unknown user '%s'", user);
         buf[0] = buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 5;
-        bufferevent_write (bev, buf, buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1);
 
-        /* enable write_callback so we close connection in case client doesn't */
-        bufferevent_setcb (bev, mysql_read_callback, mysql_write_callback,
-                           mysql_event_callback, (void *) bev_arg);
+        uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+        uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
+        int newlen = buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1;
+        newbuf->base = bufpool_acquire(pool, &newlen);
+
+        memcpy(newbuf->base, buf, buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1);
+        newbuf->len=buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1;
+        req->data=newbuf;
+        if (uv_write(req, bev_arg->stream, newbuf, 1, on_write)) {
+            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+            if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+                free(shutdown);
+            }
+            return 1;
+        }
+
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
+        }
+
 
         if (mysql_server)
             free (mysql_server);
@@ -342,147 +327,58 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
     /* if remote connection exists free it */
     if (bev_arg->remote) {
-        bufferevent_free (bev_arg->remote->bev);
+        fprintf(stderr, "should not happen\n");
         free (bev_arg->remote);
     }
 
-    bev_remote =
-        bufferevent_socket_new (event_base, -1, BEV_OPT_CLOSE_ON_FREE);
 
-    if (!bev_remote || !destination) {
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-        bufferevent_free (bev);
-        free (bev_arg);
+    if (!destination) {
+        fprintf(stderr, "fuck\n");
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
+        }
         if (mysql_server)
             free (mysql_server);
 
         return 1;
     }
 
-    bev_arg_remote = malloc (sizeof (struct bev_arg));
-
-    bev_arg_remote->bev = bev_remote;
-
-    bev_arg->remote = bev_arg_remote;
-    bev_arg_remote->remote = bev_arg;
+    bev_arg_remote = create_server_connection(bev_arg, destination, bev_arg->listener);
     bev_arg->ms->not_need_remote = 0;
-
-    bev_arg_remote->type = BEV_TARGET;
-
     bev_arg_remote->ms = bev_arg->ms;
     bev_arg_remote->listener = bev_arg->listener;
-
     bev_arg->ms->handshake = 2;
-
-    bev_arg_remote->read_timeout = 0;
-
-    bev_arg_remote->connecting = 0;
-    bev_arg_remote->connected = 0;
-
-    bufferevent_setcb (bev_remote, mysql_read_callback, NULL,
-                       mysql_event_callback, (void *) bev_arg_remote);
-
-    bufferevent_disable (bev, EV_READ);
-
-    bufferevent_setwatermark (bev_remote, EV_READ, 0, INPUT_BUFFER_LIMIT);
-    bev_arg_remote->connecting = 1;
-    bev_arg_remote->destination = destination;
-
-    if (bufferevent_socket_connect
-        (bev_remote, (struct sockaddr *) &destination->sin,
-         destination->addrlen) == -1) {
-        logmsg ("bufferevent_socket_connect return -1 (full fd?)");
-        /* this if is needed here, because if connect() fails libevent will call mysql_event_callback
-         * immediately, and not from main event loop. so bev_arg->ms can be already freed
-         */
-
-        if (bev_arg->ms) {
-            free_ms (bev_arg->ms);
-            bev_arg->ms = NULL;
-        }
-
-        if (bev_arg->remote) {
-            bufferevent_free (bev_arg->remote->bev);
-            bev_arg->remote->ms = NULL;
-            free (bev_arg->remote);
-        }
-
-        bufferevent_free (bev);
-        free (bev_arg);
-
-        if (mysql_server)
-            free (mysql_server);
-
-        return 1;
-    }
-    bev_arg_remote->connecting = 0;
-    struct linger l;
-    int flag = 1;
-
-    l.l_onoff = 1;
-    l.l_linger = 0;
-    setsockopt (bufferevent_getfd (bev_remote), SOL_SOCKET, SO_LINGER,
-                (void *) &l, sizeof (l));
-    setsockopt (bufferevent_getfd (bev_remote), IPPROTO_TCP, TCP_NODELAY,
-                (char *) &flag, sizeof (int));
 
     if (mysql_server)
         free (mysql_server);
-
-    /* connect timeout timer */
-    struct timeval time;
-    time.tv_sec = connect_timeout;
-    time.tv_usec = 0;
-
-    bev_arg_remote->connect_timer =
-        event_new (event_base, -1, 0, mysql_connect_timeout_cb,
-                   bev_arg_remote);
-    if (bev_arg_remote->connect_timer) {
-        event_add (bev_arg_remote->connect_timer, &time);
-    }
 
     return 1;
 }
 
 int
-handle_auth_with_server (struct bev_arg *bev_arg, struct bufferevent *bev,
-                         int len, struct bufferevent *bev_remote)
+handle_auth_with_server (struct bev_arg *bev_arg, const uv_buf_t *uv_buf, size_t nread)
 {
     char *user;
     int user_len;
     char *scramble_ptr;
     char mysql_server_init_packet[4096];
 
-    if (len < MYSQL_PACKET_HEADER_SIZE + MYSQL_INIT_PACKET_MIN_SIZE
-        || len > sizeof (mysql_server_init_packet)) {
-        bev_arg->listener->nr_conn--;
-
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
-            free (bev_arg->remote);
+    if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_INIT_PACKET_MIN_SIZE
+        || nread > sizeof (mysql_server_init_packet)) {
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
         }
-
-        bufferevent_free (bev);
-        free (bev_arg);
 
         return 1;
     }
 
 
     if (bev_arg->ms->hash_stage1) {
-        evbuffer_copyout (bufferevent_get_input (bev),
-                          mysql_server_init_packet, len);
-
         bev_arg->ms->scramble2 =
-            get_scramble_from_init_packet (mysql_server_init_packet, len);
+            get_scramble_from_init_packet (uv_buf->base, nread);
     }
-
-    evbuffer_drain (bufferevent_get_input (bev), len);
 
     if (bev_arg->ms->hash_stage1) {
         user =
@@ -498,35 +394,41 @@ handle_auth_with_server (struct bev_arg *bev_arg, struct bufferevent *bev,
                                    bev_arg->ms->hash_stage1);
     }
 
-    if (bufferevent_write
-        (bev, bev_arg->ms->client_auth_packet,
-         bev_arg->ms->client_auth_packet_len) == -1) {
-        bev_arg->listener->nr_conn--;
+    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
+    int newlen = bev_arg->ms->client_auth_packet_len;
+    newbuf->base = bufpool_acquire(pool, &newlen);
 
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            bufferevent_free (bev_arg->remote->bev);
-            free (bev_arg->remote);
-        }
-
-        bufferevent_free (bev);
-        free (bev_arg);
-
-        return 1;
+    memcpy(newbuf->base,bev_arg->ms->client_auth_packet, bev_arg->ms->client_auth_packet_len);
+    newbuf->len=bev_arg->ms->client_auth_packet_len;
+    req->data=newbuf;
+    if (uv_write(req, bev_arg->stream, newbuf, 1, on_write)) {
+            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+            if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+                free(shutdown);
+            }
+            bufpool_release(newbuf->base);
     }
 
     free_ms (bev_arg->ms);
     bev_arg->ms = NULL;
     bev_arg->remote->ms = NULL;
 
-    bufferevent_setcb (bev, read_callback, NULL, event_callback,
-                       (void *) bev_arg);
-    bufferevent_setcb (bev_remote, read_callback, NULL, event_callback,
-                       (void *) bev_arg->remote);
+    if (uv_read_start(bev_arg->stream, alloc_cb, on_read)) {
+            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+            if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+                free(shutdown);
+            }
+            return 0;
 
-    bufferevent_enable (bev_remote, EV_READ);
+    }
+    if (uv_read_start(bev_arg->remote->stream, alloc_cb, on_read)) {
+            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+            if (uv_shutdown(shutdown, bev_arg->remote->stream, on_shutdown)) {
+                free(shutdown);
+            }
+            return 0;
+    }
 
     return 1;
 }
