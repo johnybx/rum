@@ -26,7 +26,6 @@
 #include <assert.h>
 
 #include "uv.h"
-#include "bufpool.h"
 
 #define MYSQL50_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x30\x2e\x39\x32\x2d\x6c\x6f\x67\x00\xbf\x96\xc2\x10\x69\x5f\x21\x23\x2a\x49\x73\x26\x00\x2c\xa2\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x60\x36\x28\x65\x44\x66\x54\x53\x22\x4c\x3b\x22\x00"
 #define MYSQL51_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x31\x2e\x36\x33\x2d\x6c\x6f\x67\x00\xc2\x0d\xca\x73\x47\x46\x65\x4b\x29\x29\x30\x57\x00\xff\xf7\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x45\x32\x6a\x42\x48\x23\x73\x3e\x76\x5c\x4b\x3f\x00"
@@ -52,6 +51,46 @@
 #define MODE_FAILOVER 1 /* -f tcp:...,tcp:... */
 #define MODE_FAILOVER_RR 2 /* -r tcp:...,tcp:... */
 #define MODE_FAILOVER_R 3 /* -R tcp:...,tcp:... */
+
+#define BUFPOOL_CAPACITY 100
+#define BUF_SIZE 64000
+
+typedef struct bufpool_s bufpool_t;
+
+struct bufpool_s {
+    void *first;
+    int used;
+    int size;
+    int alloc_size;
+};
+
+#define bufbase(ptr) ((bufbase_t *)((char *)(ptr) - sizeof(bufbase_t)))
+#define buflen(ptr) (bufbase(ptr)->len)
+
+typedef struct bufbase_s bufbase_t;
+
+struct bufbase_s {
+    bufpool_t *pool;
+    void *next;
+    int len;
+};
+
+
+
+/* bufpool.c */
+void *bufpool_dummy();
+void *bufpool_grow(bufpool_t *pool);
+void bufpool_enqueue(bufpool_t *pool, void *ptr);
+void *bufpool_dequeue(bufpool_t *pool);
+void bufpool_init(bufpool_t *pool, int size);
+void bufpool_done(bufpool_t *pool);
+void alloc_cb(uv_handle_t *handle, size_t size, uv_buf_t *buf);
+void *bufpool_acquire(bufpool_t *pool, int *len);
+void *bufpool_alloc(bufpool_t *pool, int len);
+void bufpool_done(bufpool_t *pool);
+void bufpool_release(void *ptr);
+void bufpool_print_stats(uv_timer_t* handle);
+
 
 struct listener
 {

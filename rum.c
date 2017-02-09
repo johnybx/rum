@@ -72,12 +72,12 @@ main (int ac, char *av[])
 
     bufpool_init(pool, 64000);
 
-/*
+
     uv_timer_t *handle;
     handle = malloc (sizeof(uv_timer_t));
-    uv_timer_init(loop,handle);
+    uv_timer_init(uv_default_loop(),handle);
     uv_timer_start(handle, bufpool_print_stats, 1000, 1000);
-*/
+
 
     sigint = malloc(sizeof(uv_signal_t));
     sigterm = malloc(sizeof(uv_signal_t));

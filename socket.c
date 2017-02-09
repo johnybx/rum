@@ -28,6 +28,11 @@ extern int server_keepcnt;
 extern int server_keepidle;
 extern int server_keepintvl;
 
+/* uv_shutdown() callback:
+ *  - free all resources
+ *  - shutdown opposite stream if exists (if it is still connected/not shutdowned)
+ *  - call uv_close()
+ */
 void on_shutdown(uv_shutdown_t *shutdown, int status)
 {
     struct bev_arg *bev_arg = shutdown->handle->data;
@@ -63,19 +68,19 @@ void on_shutdown(uv_shutdown_t *shutdown, int status)
         }
     }
 
-
     uv_close((uv_handle_t *)shutdown->handle, on_close);
     free(shutdown);
 }
-
-
 
 void on_connect_timeout (uv_timer_t *timer)
 {
     struct bev_arg *bev_arg = timer->data;
 
+    /* release timer */
     uv_timer_stop(timer);
     uv_close((uv_handle_t *)timer, on_close_timer);
+
+    /* close socket */
     bev_arg->connect_timer = NULL;
     /* we cannot call here uv_shutdown because it will fail (socket is not connected) */
     bev_arg->uv_closed = 1;
@@ -86,12 +91,16 @@ void on_read_timeout (uv_timer_t *timer)
 {
     struct bev_arg *bev_arg = timer->data;
 
+    /* release timer */
     uv_timer_stop(timer);
     uv_close((uv_handle_t *)timer, on_close_timer);
+
+    /* shutdown socket */
     bev_arg->read_timer = NULL;
     uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
     uv_shutdown(shutdown, bev_arg->stream, on_shutdown);
 }
+
 void on_close_timer(uv_handle_t* handle)
 {
     free(handle);
@@ -111,14 +120,12 @@ void on_close(uv_handle_t* handle)
 
 /* after every write release buffers */
 void on_write(uv_write_t* req, int status) {
-    /* Logic which handles the write result */
     struct bev_arg *bev_arg = req->handle->data;
 
     uv_buf_t *buf = (uv_buf_t *)req->data;
 
     /* if reading from remote socket was stopped because o non-zero write_queue, reenable reading  */
     if (bev_arg->read_stopped && bev_arg->remote && req->handle->write_queue_size == 0) {
-        fprintf(stderr, "starting read %d\n", req->handle->write_queue_size);
         uv_read_start(bev_arg->remote->stream, alloc_cb, on_read);
         bev_arg->read_stopped=0;
     }
@@ -128,7 +135,7 @@ void on_write(uv_write_t* req, int status) {
     free(req);
 }
 
-/* used only from stats */
+/* used only from stats_callback.c */
 void on_write_free(uv_write_t* req, int status) {
     uv_buf_t *buf = (uv_buf_t *)req->data;
     free(buf->base);
@@ -146,7 +153,7 @@ void on_write_nofree(uv_write_t* req, int status) {
 }
 
 /*
- * create_listen_socket return O_NONBLOCK socket ready for accept()
+ * create_listen_socket return uv_stream
  * arg - tcp:blah:blah alebo sock:blah
  */
 uv_stream_t *
@@ -336,12 +343,8 @@ on_incoming_connection (uv_stream_t *server, int status)
     struct bev_arg *bev_arg_client, *bev_arg_target;
 
     struct destination *destination=NULL;
-            int r;
+    int r;
 
-/*
-    uv_tcp_t *client = malloc(sizeof(uv_tcp_t));
-    uv_pipe_t *client = malloc(sizeof(uv_pipe_t));
-*/
     uv_stream_t *client;
     if (listener->type == SOCKET_TCP) {
         client = malloc(sizeof(uv_tcp_t));
@@ -378,13 +381,6 @@ on_incoming_connection (uv_stream_t *server, int status)
 
     listener->nr_allconn++;
     listener->nr_conn++;
-
-/*
-    bev_client =
-        bufferevent_socket_new (event_base, csock, BEV_OPT_CLOSE_ON_FREE);
-    bev_target =
-        bufferevent_socket_new (event_base, -1, BEV_OPT_CLOSE_ON_FREE);
-*/
 
     /* CLIENT bev_arg */
     /* parameter for callback functions */
@@ -439,8 +435,9 @@ on_incoming_connection (uv_stream_t *server, int status)
                 free(req);
 
                 uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                uv_shutdown(shutdown, bev_arg_client->stream, on_shutdown);
-                //uv_close((uv_handle_t *)bev_arg_client->stream, on_close);
+                if (uv_shutdown(shutdown, bev_arg_client->stream, on_shutdown)) {
+                    free(shutdown);
+                }
             }
 
             return;
