@@ -17,8 +17,6 @@ init_postgresql_cdb_file (char *type)
     } else {
         cdb_init (&postgresql_cdb, postgresql_cdb_fd);
     }
-
-
 }
 
 

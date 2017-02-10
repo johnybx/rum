@@ -72,11 +72,12 @@ main (int ac, char *av[])
 
     bufpool_init(pool, 64000);
 
-
+/*
     uv_timer_t *handle;
     handle = malloc (sizeof(uv_timer_t));
     uv_timer_init(uv_default_loop(),handle);
     uv_timer_start(handle, bufpool_print_stats, 1000, 1000);
+*/
 
 
     sigint = malloc(sizeof(uv_signal_t));
@@ -113,7 +114,6 @@ main (int ac, char *av[])
         {"mysqltype",   required_argument, 0,  't' },
         {"failover-r",   required_argument, 0,  'R' },
         {"failover",   required_argument, 0,  'f' },
-        {"failover-rr",   required_argument, 0,  'r' },
         {"read-timeout",   required_argument, 0,  0 },
         {"connect-timeout",   required_argument, 0,  0 },
         {"client-keepalive",   no_argument, &client_keepalive,  1 },
@@ -217,26 +217,6 @@ main (int ac, char *av[])
 
             break;
 
-        case 'r':
-            mode=MODE_FAILOVER_RR;
-            ptr=tmp=strdup(optarg);
-            i=0;
-            while(tmp[i]!='\0') {
-                if (tmp[i]==',') {
-                    tmp[i]='\0';
-                    add_destination(ptr);
-                    destinations++;
-                    ptr=tmp+i+1;
-                }
-                i++;
-            }
-
-            add_destination(ptr);
-            destinations++;
-            randomize_destinations();
-
-            break;
-
         case 'R':
             mode=MODE_FAILOVER_R;
             ptr=tmp=strdup(optarg);
@@ -312,6 +292,10 @@ main (int ac, char *av[])
         }
     }
 
+    if (!first_destination) {
+        usage ();
+    }
+
     /* main libevent loop */
     uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
@@ -350,7 +334,7 @@ void
 usage ()
 {
     printf
-        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-r tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - randomize list of targets and use round-robin for first target\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\t--client-keepalive - enable tcp keepalive for client connections\n\t--client-keepcnt X - override tcp_keepalive_probes\n\t--client-keepidle X - override tcp_keepalive_time\n\t--client-keepintvl X - override tcp_keepalive_intvl\n\t--server-keepalive - enable tcp keepalive for server connections\n\t--server-keepcnt X - override tcp_keepalive_probes\n\t--server-keepidle X - override tcp_keepalive_time\n\t--server-keepintvl X - override tcp_keepalive_intvl\n\n");
+        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\t--client-keepalive - enable tcp keepalive for client connections\n\t--client-keepcnt X - override tcp_keepalive_probes\n\t--client-keepidle X - override tcp_keepalive_time\n\t--client-keepintvl X - override tcp_keepalive_intvl\n\t--server-keepalive - enable tcp keepalive for server connections\n\t--server-keepcnt X - override tcp_keepalive_probes\n\t--server-keepidle X - override tcp_keepalive_time\n\t--server-keepintvl X - override tcp_keepalive_intvl\n\n");
     exit (-1);
 }
 

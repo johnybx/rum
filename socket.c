@@ -11,8 +11,6 @@ extern int cache_mysql_init_packet_len;
 extern char *cache_mysql_init_packet_scramble;
 extern int mode;
 
-struct destination *destination_rr = NULL;
-
 int logfd;
 
 extern int connect_timeout;
@@ -252,21 +250,9 @@ on_outgoing_connection (uv_connect_t *connect, int status)
     struct bev_arg *bev_arg = connect->data;
     int r;
     uv_stream_t *stream = connect->handle;
+    struct destination *destination;
 
     free(connect);
-
-    if (status<0) {
-            /* TODO: failover */
-
-            /* if we hit connect_timeout, we already call uv_close() in on_connect_timeout() */
-            /* calling it again will cause segfault */
-            if (!bev_arg->uv_closed) {
-            // TODO TEST
-                uv_close((uv_handle_t *)stream, on_close);
-          }
-        
-        return;
-    }
 
     if (bev_arg->connect_timer) {
         uv_timer_stop(bev_arg->connect_timer);
@@ -274,9 +260,51 @@ on_outgoing_connection (uv_connect_t *connect, int status)
         bev_arg->connect_timer = NULL;
     }
 
+    if (status<0) {
+        /* if we hit connect_timeout, we already call uv_close() in on_connect_timeout() */
+        /* calling it again will cause segfault */
+        if (!bev_arg->uv_closed) {
+            uv_close((uv_handle_t *)stream, on_close);
+        }
+
+        if (mode == MODE_NORMAL) {
+            /* connection failed, close client socket */
+            if (bev_arg->remote) {
+                bev_arg->remote->remote=NULL;
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                uv_shutdown(shutdown, bev_arg->remote->stream, on_shutdown);
+            }
+            return;
+        } else if (mode == MODE_FAILOVER || mode == MODE_FAILOVER_R) {
+            /* FAILOVER */
+            if (bev_arg->destination->next) {
+                /* select next server for connection */
+                logmsg("failover: connection to %s failed (%s), connecting to next server %s", bev_arg->destination->s, uv_strerror(status), bev_arg->destination->next->s);
+                destination = bev_arg->destination->next;
+            } else {
+                logmsg("failover: no server available, closing client connection");
+                bev_arg->remote->remote=NULL;
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                uv_shutdown(shutdown, bev_arg->remote->stream, on_shutdown);
+                return;
+            }
+        }
+ 
+        if (mode == MODE_FAILOVER || mode == MODE_FAILOVER_R || mode == MODE_FAILOVER_RR) {
+            struct bev_arg *bev_arg_target;
+            bev_arg_target = create_server_connection(bev_arg->remote, destination, bev_arg->listener);
+            if (!bev_arg_target) {
+                bev_arg->remote->remote=NULL;
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                uv_shutdown(shutdown, bev_arg->remote->stream, on_shutdown);
+            }
+        }
+    
+        return;
+    }
+
     bev_arg->stream = stream;
 
-    // TODO
     uv_tcp_nodelay((uv_tcp_t *)stream, 1);
 
     /* on successfull connect */
@@ -357,17 +385,6 @@ on_incoming_connection (uv_stream_t *server, int status)
     } else if (mode == MODE_FAILOVER || mode == MODE_FAILOVER_R) {
         /* use first but try second in case of fail */
         destination = first_destination;
-    } else if (mode == MODE_FAILOVER_RR) {
-        /* use round-robin & set destination_rr to random */
-        if (destination_rr == NULL) {
-            destination = destination_rr = first_destination;
-        } else {
-            if (destination_rr->next) {
-                destination = destination_rr = destination_rr->next;
-            } else {
-                destination = destination_rr = first_destination;
-            }
-        }
     }
 
     client = malloc (sizeof (uv_tcp_t));
@@ -400,10 +417,15 @@ on_incoming_connection (uv_stream_t *server, int status)
     client->data = bev_arg_client;
     bev_arg_client->remote = NULL;
 
-    /* set callback functions and argument */
     if (listener->type == LISTENER_DEFAULT) {
         if (!mysql_cdb_file && !postgresql_cdb_file) {
-            /* enable read callback after we connect to remote server */
+            /* no cdb files, classic redirector */
+            bev_arg_target = create_server_connection(bev_arg_client, destination, listener);
+            if (!bev_arg_target) {
+                bev_arg_client->remote=NULL;
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                uv_shutdown(shutdown, bev_arg_client->stream, on_shutdown);
+            }
         } else if (mysql_cdb_file) {
             /* if mysql_cdb is enabled, use different callback functions */
             bev_arg_client->ms = init_ms ();
@@ -457,12 +479,6 @@ on_incoming_connection (uv_stream_t *server, int status)
         }
     } else if (listener->type == LISTENER_STATS) {
         return send_stats_to_client (client);
-    }
-    /* no cdb files, classic redirector */
-    bev_arg_target = create_server_connection(bev_arg_client, destination, listener);
-    if (!bev_arg_target) {
-        fprintf(stderr, "nope\n");
-        uv_close((uv_handle_t *)bev_arg_client->stream, on_close);
     }
 }
 

@@ -37,8 +37,8 @@
 /* max length of data in socket output buffer */
 #define OUTPUT_BUFFER_LIMIT 16384
 
-#define CONNECT_TIMEOUT 60
-#define READ_TIMEOUT 60          /* only for first data from server, if mysql is stuck and dont send any data within READ_TIMEOUT we drop connection */
+#define CONNECT_TIMEOUT 6
+#define READ_TIMEOUT 6          /* only for first data from server, if mysql is stuck and dont send any data within READ_TIMEOUT we drop connection */
 
 #define MYSQL_PACKET_HEADER_SIZE 4
 #define MYSQL_INIT_PACKET_MIN_SIZE 46
