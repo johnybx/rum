@@ -2,13 +2,6 @@
 
 extern bufpool_t *pool;
 
-void alloc_cb(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
-    int len = size; /* Requested buffer size */
-    void *ptr = bufpool_acquire(pool, &len);
-    *buf = uv_buf_init(ptr, len);
-
-}
-
 void bufpool_print_stats(uv_timer_t* handle)
 {
     int i=0;
