@@ -278,3 +278,8 @@ void stats_write_callback (struct bufferevent *bev, void *ptr);
 void send_stats_to_client (struct bufferevent *bev);
 */
 
+void on_read_timeout (uv_timer_t *timer);
+void on_connect_timeout (uv_timer_t *timer);
+void on_write(uv_write_t* req, int status);
+void on_write_free(uv_write_t* req, int status);
+void on_write_nofree(uv_write_t* req, int status);
