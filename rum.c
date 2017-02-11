@@ -292,7 +292,7 @@ main (int ac, char *av[])
         }
     }
 
-    if (!first_destination) {
+    if (!first_destination && !mysql_cdb_file && !postgresql_cdb_file) {
         usage ();
     }
 

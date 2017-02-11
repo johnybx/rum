@@ -326,7 +326,7 @@ on_outgoing_connection (uv_connect_t *connect, int status)
             newbuf->len=bev_arg->ms->client_auth_packet_len;
             req->data = newbuf;
             bev_arg->ms->client_auth_packet = NULL;
-            if (uv_write(req, stream, newbuf, 1, on_write)) {
+            if (uv_write(req, stream, newbuf, 1, on_write_free)) {
                 logmsg ("on_outgoing_connection(): uv_write(postgresql client_auth_packet) failed");
 
                 free(newbuf->base);

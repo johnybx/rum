@@ -4,16 +4,10 @@
 #include "mysql_password/mysql_com.h"
 #include "mysql_password/sha1.h"
 
-extern struct event_base *event_base;
 extern bufpool_t *pool;
-
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
-
 extern struct destination *first_destination;
-
-extern int connect_timeout;
-extern int read_timeout;
 
 /* initialize struct mysql_mitm */
 struct mysql_mitm *

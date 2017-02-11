@@ -1,11 +1,7 @@
 #include "rum.h"
 
-extern struct event_base *event_base;
-
+extern bufpool_t *pool;
 extern struct destination *first_destination;
-
-extern int connect_timeout;
-extern int read_timeout;
 
 int
 pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
@@ -22,6 +18,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     char *pg_server = NULL, *userptr;
     struct bev_arg *bev_arg_remote;
 
+    /* TODO why? */
     if (nread < 2*sizeof(int) + sizeof("user")) {
         /* check if it is SSLRequest */
         if (nread == 8) {
@@ -42,11 +39,10 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
                 newbuf->base[0]='N';
                 newbuf->len=1;
                 req->data = newbuf;
-                if (uv_write(req, bev_arg->stream, newbuf, 1, on_write)) {
+                if (uv_write(req, bev_arg->stream, newbuf, 1, on_write_free)) {
                     uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
                     if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
                         free(shutdown);
-                        uv_close((uv_handle_t *)bev_arg->stream, on_close);
                     }
                 }
 
@@ -54,17 +50,10 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
             }
         }
 
-        bev_arg->listener->nr_conn--;
-
-        free_ms (bev_arg->ms);
-        bev_arg->ms = NULL;
-
-        if (bev_arg->remote) {
-            bev_arg->remote->ms = NULL;
-            free (bev_arg->remote);
+        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            free(shutdown);
         }
-
-        free (bev_arg);
 
         return 1;
     }
@@ -76,6 +65,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     userptr =
         bev_arg->ms->client_auth_packet + 2 * sizeof(int) +
         sizeof("user");
+    // TODO
     user_len = strnlen (userptr, nread - 2*sizeof(int) - sizeof("user"));
     if (user_len > sizeof(user)-1) {
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
@@ -110,14 +100,8 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
             prepareclient (pg_server, destination);
         }
     } else {
-        /* if user is not found in cdb we use mysql server set with -d argument
-         * but connection will not be successful, we need user encrypted password which should be in cdb file
-         */
-        destination = first_destination;
-
+        /*if user is not found in cdb  sent client error msg & close connection  */
         logmsg("user %s not found in cdb", user);
-        /* we reply access denied  */
-        //memcpy (buf, ERR_LOGIN_PACKET_PREFIX, sizeof(ERR_LOGIN_PACKET_PREFIX));
 
         memset(buf, '\0', sizeof(buf));
         buf[0]='E';
@@ -132,14 +116,22 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
         memcpy (buf + 1 + 4 + buf1len + 1, buf2, buf2len);
         memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1, buf3, buf3len);
         memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1 + buf3len + 1, buf4, buf4len);
-        //bufferevent_write (bev, buf, buflen);
-        // TODO
 
-        /* enable write_callback so we close connection in case client doesn't */
-/*
-        bufferevent_setcb (bev, postgresql_read_callback, postgresql_write_callback,
-                           postgresql_event_callback, (void *) bev_arg);
-*/
+        uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+        uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
+        newbuf->base = malloc(buflen);
+        newbuf->len = buflen;
+        memcpy(newbuf->base, buf, buflen);
+        req->data = newbuf;
+        if (uv_write(req, bev_arg->stream, newbuf, 1, on_write_free)) {
+            free(newbuf->base);
+            free(newbuf);
+            free(req);
+            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+            if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+                free(shutdown);
+            }
+        }
 
         if (pg_server)
             free (pg_server);
@@ -149,23 +141,22 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
 
     /* if remote connection exists free it */
     if (bev_arg->remote) {
-//        bufferevent_free (bev_arg->remote->bev);
+        fprintf(stderr, "should not happend\n");
         free (bev_arg->remote);
     }
 
     if (!destination) {
+        /* never happen ? */
         if (pg_server)
             free (pg_server);
 
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
         if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
             free(shutdown);
-            uv_close((uv_handle_t *)bev_arg->stream, on_close);
         }
 
         return 1;
     }
-
 
     bev_arg_remote = create_server_connection(bev_arg, destination, bev_arg->listener);
     bev_arg->ms->not_need_remote = 0;
@@ -175,6 +166,8 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
 
     if (pg_server)
         free (pg_server);
+
+    uv_read_stop(bev_arg->stream);
 
     return 1;
 }

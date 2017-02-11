@@ -6,19 +6,6 @@ char *cache_mysql_init_packet = NULL;
 int cache_mysql_init_packet_len;
 char *cache_mysql_init_packet_scramble;
 
-extern int connect_timeout;
-extern int read_timeout;
-
-extern int client_keepalive;
-extern int client_keepcnt;
-extern int client_keepidle;
-extern int client_keepintvl;
-
-extern int server_keepalive;
-extern int server_keepcnt;
-extern int server_keepidle;
-extern int server_keepintvl;
-
 void
 mysql_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 {
@@ -60,17 +47,14 @@ mysql_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
             if (uv_shutdown(shutdown, stream, on_shutdown)) {
                 free(shutdown);
-                uv_close((uv_handle_t *)stream, on_close);
             }
-
-        }
+        } /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release bufpool} */
 
     } else {
         /* remote stream doesn't exist, free self */
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
         if (uv_shutdown(shutdown, stream, on_shutdown)) {
             free(shutdown);
-            uv_close((uv_handle_t *)stream, on_close);
         }
     }
 
