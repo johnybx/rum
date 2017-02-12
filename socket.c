@@ -41,7 +41,7 @@ create_listen_socket (char *arg)
     uint16_t port;
     char type;
     char *host_str, *port_str, *sockfile_str;
-    int i,ok,r;
+    int r;
     uv_tcp_t *tcp_t;
     uv_pipe_t *pipe_t;
 
@@ -53,9 +53,14 @@ create_listen_socket (char *arg)
                &port_str, &sockfile_str, 1);
 
     if (type == SOCKET_TCP) {
+        uv_os_fd_t fd;
         s = (struct sockaddr *) &sin;
         tcp_t = malloc(sizeof(uv_tcp_t));
-        uv_tcp_init(uv_default_loop(), tcp_t);
+        uv_tcp_init_ex(uv_default_loop(), tcp_t, AF_INET);
+        /* set SO_REUSEPORT so we can bind to tcp port when it is still used by running rum */
+        uv_fileno((uv_handle_t *)tcp_t, &fd);
+        int optval = 1;
+        setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
     } else if (type == SOCKET_UNIX) {
         s = (struct sockaddr *) &sun;
         pipe_t = malloc(sizeof(uv_pipe_t));
@@ -65,24 +70,13 @@ create_listen_socket (char *arg)
         _exit (-1);
     }
 
-    for (i=0,ok=0;i<25;i++) {
-        if (type == SOCKET_TCP) {
-            r = uv_tcp_bind(tcp_t, (const struct sockaddr*)s, 0);
-        } else if (type == SOCKET_UNIX) {
-            r = uv_pipe_bind(pipe_t, sun.sun_path);
-        }
+    if (type == SOCKET_TCP) {
+        r = uv_tcp_bind(tcp_t, (const struct sockaddr*)s, 0);
+    } else if (type == SOCKET_UNIX) {
+        r = uv_pipe_bind(pipe_t, sun.sun_path);
+    }
 
-        if (r != 0) {
-            /* if cannot bind sleep 200ms and retry 25x */
-            fprintf(stderr,"bind() to %s failed\n", arg);
-            usleep(200*1000);
-        } else {
-            ok=1;
-            break;
-        }
-     }
-
-    if (ok==0) {
+    if (r) {
         fprintf(stderr,"bind() to %s failed, exiting\n", arg);
         _exit (-1);
     }

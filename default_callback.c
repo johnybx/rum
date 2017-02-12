@@ -176,6 +176,12 @@ void on_close(uv_handle_t* handle)
     free(bev_arg);
 }
 
+void on_close_listener(uv_handle_t* handle)
+{
+    free(handle);
+}
+
+
 /* after every write release buffers */
 void on_write(uv_write_t* req, int status) {
     struct bev_arg *bev_arg = req->handle->data;

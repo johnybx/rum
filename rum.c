@@ -35,7 +35,7 @@ main (int ac, char *av[])
 {
     int ret, ch, daemonize = 0;
     char *logfile = NULL;
-    int i;
+    int i, ok;
     char *tmp,*ptr;
     uv_signal_t *sigint;
     uv_signal_t *sigterm;
@@ -165,7 +165,7 @@ main (int ac, char *av[])
                 listener = listener->next;
             }
             listener->s = strdup (optarg);
-            listener->stream = create_listen_socket (optarg);
+            listener->stream = NULL;
             listener->next = NULL;
             /* vynulujeme statistiky */
             listener->nr_conn = 0;
@@ -282,14 +282,27 @@ main (int ac, char *av[])
 
     /* add all listen (-s -m) ports to event_base, if someone connect: accept_connect is executed with struct listener argument */
     for (listener = first_listener; listener; listener = listener->next) {
-        listener->stream->data = listener;
-        int r = uv_listen((uv_stream_t *)listener->stream, -1, on_incoming_connection);
+        for (i=0,ok=0;i<10;i++) {
+            listener->stream = create_listen_socket (listener->s);
+            listener->stream->data = listener;
+            int r = uv_listen((uv_stream_t *)listener->stream, -1, on_incoming_connection);
 
-        if (r) {
-            /* error */
-            fprintf(stderr, "listen failed\n");
-            exit (1);
+            if (r) {
+                fprintf(stderr, "listen to %s failed, retrying\n", listener->s);
+                uv_close((uv_handle_t *)listener->stream, on_close_listener);
+                usleep(200*1000);
+            } else {
+                fprintf(stdout, "listening on %s\n", listener->s);
+                ok=1;
+                break;
+            }
         }
+
+        if (ok==0) {
+            fprintf(stderr,"listen to %s failed, exiting\n", listener->s);
+            _exit (-1);
+        }
+
     }
 
     if (!first_destination && !mysql_cdb_file && !postgresql_cdb_file) {
@@ -323,8 +336,6 @@ main (int ac, char *av[])
 
     free(sigint);
     free(sigterm);
-
-//    usage ();
 
     exit (0);
 }

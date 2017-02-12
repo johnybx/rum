@@ -189,6 +189,7 @@ void shuffle(struct destination **array, size_t n);
 /* socket.c */
 void on_shutdown(uv_shutdown_t *shutdown, int status);
 void on_close_timer(uv_handle_t* handle);
+void on_close_listener(uv_handle_t* handle);
 void on_close(uv_handle_t* handle);
 struct bev_arg *create_server_connection(struct bev_arg *bev_arg_client, struct destination *destination, struct listener *listener);
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf);
