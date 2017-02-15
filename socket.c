@@ -149,10 +149,10 @@ on_outgoing_connection (uv_connect_t *connect, int status)
             /* FAILOVER */
             if (bev_arg->destination->next) {
                 /* select next server for connection */
-                logmsg("failover: connection to %s failed (%s), connecting to next server %s", bev_arg->destination->s, uv_strerror(status), bev_arg->destination->next->s);
+                logmsg("%s: failover: connection to %s failed (%s), connecting to next server %s", __FUNCTION__, bev_arg->destination->s, uv_strerror(status), bev_arg->destination->next->s);
                 destination = bev_arg->destination->next;
             } else {
-                logmsg("failover: no server available, closing client connection");
+                logmsg("%s: failover: no server available, closing client connection", __FUNCTION__);
                 bev_arg->remote->remote=NULL;
                 uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
                 uv_shutdown(shutdown, bev_arg->remote->stream, on_shutdown);
@@ -197,7 +197,7 @@ on_outgoing_connection (uv_connect_t *connect, int status)
             req->data = newbuf;
             bev_arg->ms->client_auth_packet = NULL;
             if (uv_write(req, stream, newbuf, 1, on_write_free)) {
-                logmsg ("on_outgoing_connection(): uv_write(postgresql client_auth_packet) failed");
+                logmsg ("%s: uv_write(postgresql client_auth_packet) failed", __FUNCTION__);
 
                 free(newbuf->base);
                 free(newbuf);
@@ -261,7 +261,7 @@ on_incoming_connection (uv_stream_t *server, int status)
     uv_tcp_init(uv_default_loop(), (uv_tcp_t *)client);
 
     if (uv_accept(server, (uv_stream_t *)client)) {
-        logmsg ("on_incoming_connection: uv_accept failed");
+        logmsg ("%s: uv_accept failed", __FUNCTION__);
         free(client);
         return;
     }
@@ -313,7 +313,7 @@ on_incoming_connection (uv_stream_t *server, int status)
 
             r = uv_read_start((uv_stream_t *)client, alloc_cb, mysql_on_read);
             if (r) {
-                logmsg("on_incoming_connection(): uv_read_start failed (%s)", uv_strerror(r));
+                logmsg("%s: uv_read_start failed (%s)", __FUNCTION__, uv_strerror(r));
                 uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
                 if (uv_shutdown(shutdown, bev_arg_client->stream, on_shutdown)) {
                     free(shutdown);
@@ -328,7 +328,7 @@ on_incoming_connection (uv_stream_t *server, int status)
             newbuf->len=cache_mysql_init_packet_len;
             req->data = newbuf;
             if (uv_write(req, client, newbuf, 1, on_write_nofree)) {
-                logmsg ("on_incoming_connection(): uv_write(cache_mysql_init_packet) failed");
+                logmsg ("%s: uv_write(cache_mysql_init_packet) failed", __FUNCTION__);
                 free(newbuf);
                 free(req);
 
@@ -349,7 +349,7 @@ on_incoming_connection (uv_stream_t *server, int status)
 
             int r = uv_read_start((uv_stream_t *)client, alloc_cb, postgresql_on_read);
             if (r) {
-                logmsg("on_incoming_connection(): uv_read_start failed (%s)", uv_strerror(r));
+                logmsg("%s: uv_read_start failed (%s)", __FUNCTION__, uv_strerror(r));
                 uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
                 if (uv_shutdown(shutdown, bev_arg_client->stream, on_shutdown)) {
                     free(shutdown);

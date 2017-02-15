@@ -18,8 +18,8 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     char *pg_server = NULL, *userptr;
     struct bev_arg *bev_arg_remote;
 
-    /* TODO why? */
-    if (nread < 2*sizeof(int) + sizeof("user")) {
+    /* username must have at least 2 bytes with \0 at end */
+    if (nread < 2*sizeof(int) + sizeof("user") + 2) {
         /* check if it is SSLRequest */
         if (nread == 8) {
             char bufx[8];
@@ -54,6 +54,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
         if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
             free(shutdown);
         }
+        logmsg("%s: error: client auth packet too short", __FUNCTION__);
 
         return 1;
     }
@@ -68,6 +69,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     // TODO
     user_len = strnlen (userptr, nread - 2*sizeof(int) - sizeof("user"));
     if (user_len > sizeof(user)-1) {
+        logmsg("%s: error: user length too long", __FUNCTION__);
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
         if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
             free(shutdown);
@@ -101,7 +103,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
         }
     } else {
         /*if user is not found in cdb  sent client error msg & close connection  */
-        logmsg("user %s not found in cdb", user);
+        logmsg("%s: error: user %s not found in cdb", __FUNCTION__, user);
 
         memset(buf, '\0', sizeof(buf));
         buf[0]='E';
@@ -141,13 +143,13 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
 
     /* if remote connection exists free it */
     if (bev_arg->remote) {
-        logmsg("pg_handle_init_packet_from_client(): bev_arg->remote is not NULL and should not be");
+        logmsg("%s: error: bev_arg->remote is not NULL and should not be", __FUNCTION__);
         free (bev_arg->remote);
     }
 
     if (!destination) {
         /* never happen ? */
-        logmsg("pg_handle_init_packet_from_client(): destination is NULL and should not be");
+        logmsg("%s: error: destination is NULL and should not be", __FUNCTION__);
         if (pg_server)
             free (pg_server);
 

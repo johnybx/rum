@@ -33,7 +33,7 @@ void send_stats_to_client(uv_stream_t *stream) {
         memcpy(buf->base, tmp, len);
         req->data = buf;
         if (uv_write(req, stream, buf, 1, on_write_free)) {
-                logmsg ("send_stats_to_client(): uv_write failed");
+                logmsg ("%s: uv_write failed", __FUNCTION__);
                 free(buf->base);
                 free(buf);
                 free(req);
@@ -60,7 +60,7 @@ void send_stats_to_client(uv_stream_t *stream) {
         memcpy(buf->base, tmp, len);
         req->data = buf;
         if (uv_write(req, stream, buf, 1, on_write_free)) {
-                logmsg ("send_stats_to_client(): uv_write failed");
+                logmsg ("%s: uv_write failed", __FUNCTION__);
                 free(buf->base);
                 free(buf);
                 free(req);
@@ -82,7 +82,7 @@ void send_stats_to_client(uv_stream_t *stream) {
         memcpy(buf->base, tmp, len);
         req->data = buf;
         if (uv_write(req, stream, buf, 1, on_write_free)) {
-                logmsg ("send_stats_to_client(): uv_write failed");
+                logmsg ("%s: uv_write failed", __FUNCTION__);
                 free(buf->base);
                 free(buf);
                 free(req);

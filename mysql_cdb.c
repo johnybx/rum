@@ -7,7 +7,6 @@ int cdb_fd;
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 
-
 void
 init_mysql_cdb_file (char *type)
 {
@@ -79,14 +78,13 @@ get_data_from_cdb (char *user, int user_len, char **mysql_server,
     char tmp[1024];
 
     if (cdb_fd == -1) {
-        logmsg("get_data_from_cdb: cdb_fd == -1 (user %s)", user);
+        logmsg("%s: cdb_fd == -1 (user %s)", __FUNCTION__, user);
         return;
     }
 
     result = cdb_find (&cdb, user, user_len);
 
     if (result <= 0) {
-        logmsg("get_data_from_cdb: cdb_find result <= 0 (user %s)", user);
         return;
     }
 
@@ -94,7 +92,7 @@ get_data_from_cdb (char *user, int user_len, char **mysql_server,
     dlen = cdb_datalen (&cdb);
 
     if (dlen > sizeof (tmp)) {
-        logmsg("get_data_from_cdb: dlen > sizeof (tmp) (user %s)", user);
+        logmsg("%s: dlen > sizeof (tmp) (user %s)", __FUNCTION__, user);
         return;
     }
 
@@ -122,7 +120,8 @@ reopen_cdb (uv_fs_event_t *handle, const char *filename, int events, int status)
 
     if ((cdb_fd = open (mysql_cdb_file, O_RDONLY)) == -1) {
         cdb_fd = -1;
-        logmsg("reopen_cdb: open failed (%s)", strerror(errno));
+        logmsg("%s: open failed (%s)", __FUNCTION__, strerror(errno));
+        // TODO  - if file does not exist, rum will never watch over it, use some timeout || global & reinit after every cdb_data_from_cdb
     } else {
         cdb_init (&cdb, cdb_fd);
     }

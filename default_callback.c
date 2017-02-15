@@ -43,7 +43,7 @@ on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             remote_stream = bev_arg->remote->stream;
             r = uv_write(req, remote_stream, sndbuf, 1, on_write);
             if (r) {
-                logmsg("on_read(): uv_write() failed: %s\n", uv_strerror(r));
+                logmsg("%s: uv_write() failed: %s\n", __FUNCTION__, uv_strerror(r));
                 bufpool_release(buf->base);
                 free(sndbuf);
                 free(req);

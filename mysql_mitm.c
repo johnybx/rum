@@ -193,7 +193,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
             free(shutdown);
         }
 
-        logmsg("invalid client packet size (packet too small)");
+        logmsg("%s: warning: invalid client packet size (packet too small)", __FUNCTION__);
         return 1;
     }
 
@@ -212,7 +212,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
             free(shutdown);
         }
 
-        logmsg("invalid client packet size (user_len > sizeof(user)-1)");
+        logmsg("%s: warning: invalid client packet size (user_len > sizeof(user)-1)", __FUNCTION__);
 
         return 1;
 
@@ -238,7 +238,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
             free(shutdown);
         }
 
-        logmsg("invalid client packet size (packet too small 2)");
+        logmsg("%s: invalid client packet size (packet too small 2)", __FUNCTION__);
 
         return 1;
     }
@@ -283,7 +283,7 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
          */
         destination = first_destination;
 
-        logmsg("user %s not found in cdb", user);
+        logmsg("%s: user %s not found in cdb", __FUNCTION__, user);
         /* we reply access denied  */
         memcpy (buf, ERR_LOGIN_PACKET_PREFIX, sizeof(ERR_LOGIN_PACKET_PREFIX));
         buflen = snprintf (buf + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1, sizeof(buf) - sizeof(ERR_LOGIN_PACKET_PREFIX), "Access denied, unknown user '%s'", user);
@@ -319,13 +319,13 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
     /* if remote connection exists free it */
     if (bev_arg->remote) {
-        logmsg("handle_auth_packet_from_client(): bev_arg->remote is not NULL and should not be");
+        logmsg("%s: bev_arg->remote is not NULL and should not be", __FUNCTION__);
         free (bev_arg->remote);
     }
 
 
     if (!destination) {
-        logmsg("handle_auth_packet_from_client(): destination is NULL and should not be");
+        logmsg("%s: destination is NULL and should not be", __FUNCTION__);
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
         if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
             free(shutdown);
