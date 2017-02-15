@@ -4,7 +4,7 @@ extern bufpool_t *pool;
 extern struct destination *first_destination;
 
 int
-pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
+pg_handle_init_packet_from_client (struct conn_data *conn_data,
                                 const uv_buf_t *uv_buf, size_t nread)
 {
     char user[64];
@@ -16,7 +16,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     int user_len, buflen, buflen_htonl, buf1len, buf2len, buf3len, buf4len;
     struct destination *destination = NULL, *dst;
     char *pg_server = NULL, *userptr;
-    struct bev_arg *bev_arg_remote;
+    struct conn_data *conn_data_remote;
 
     /* username must have at least 2 bytes with \0 at end */
     if (nread < 2*sizeof(int) + sizeof("user") + 2) {
@@ -39,9 +39,9 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
                 newbuf->base[0]='N';
                 newbuf->len=1;
                 req->data = newbuf;
-                if (uv_write(req, bev_arg->stream, newbuf, 1, on_write_free)) {
+                if (uv_write(req, conn_data->stream, newbuf, 1, on_write_free)) {
                     uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                    if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+                    if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
                         free(shutdown);
                     }
                 }
@@ -51,7 +51,7 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
         }
 
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
             free(shutdown);
         }
         logmsg("%s: error: client auth packet too short", __FUNCTION__);
@@ -59,26 +59,26 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
         return 1;
     }
 
-    bev_arg->ms->client_auth_packet_len = nread;
-    bev_arg->ms->client_auth_packet = malloc(nread);
-    memcpy(bev_arg->ms->client_auth_packet, uv_buf->base, nread);
+    conn_data->ms->client_auth_packet_len = nread;
+    conn_data->ms->client_auth_packet = malloc(nread);
+    memcpy(conn_data->ms->client_auth_packet, uv_buf->base, nread);
 
     userptr =
-        bev_arg->ms->client_auth_packet + 2 * sizeof(int) +
+        conn_data->ms->client_auth_packet + 2 * sizeof(int) +
         sizeof("user");
     // TODO
     user_len = strnlen (userptr, nread - 2*sizeof(int) - sizeof("user"));
     if (user_len > sizeof(user)-1) {
         logmsg("%s: error: user length too long", __FUNCTION__);
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
             free(shutdown);
-            uv_close((uv_handle_t *)bev_arg->stream, on_close);
+            uv_close((uv_handle_t *)conn_data->stream, on_close);
         }
         return 1;
     }
     strncpy (user,
-             bev_arg->ms->client_auth_packet + 2 * sizeof(int) +
+             conn_data->ms->client_auth_packet + 2 * sizeof(int) +
              sizeof("user"), user_len);
     user[user_len] = '\0';
 
@@ -125,12 +125,12 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
         newbuf->len = buflen;
         memcpy(newbuf->base, buf, buflen);
         req->data = newbuf;
-        if (uv_write(req, bev_arg->stream, newbuf, 1, on_write_free)) {
+        if (uv_write(req, conn_data->stream, newbuf, 1, on_write_free)) {
             free(newbuf->base);
             free(newbuf);
             free(req);
             uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-            if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+            if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
                 free(shutdown);
             }
         }
@@ -142,9 +142,9 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
     }
 
     /* if remote connection exists free it */
-    if (bev_arg->remote) {
-        logmsg("%s: error: bev_arg->remote is not NULL and should not be", __FUNCTION__);
-        free (bev_arg->remote);
+    if (conn_data->remote) {
+        logmsg("%s: error: conn_data->remote is not NULL and should not be", __FUNCTION__);
+        free (conn_data->remote);
     }
 
     if (!destination) {
@@ -154,23 +154,23 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
             free (pg_server);
 
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
+        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
             free(shutdown);
         }
 
         return 1;
     }
 
-    bev_arg_remote = create_server_connection(bev_arg, destination, bev_arg->listener);
-    bev_arg->ms->not_need_remote = 0;
-    bev_arg_remote->ms = bev_arg->ms;
-    bev_arg_remote->listener = bev_arg->listener;
-    bev_arg->ms->handshake = 2;
+    conn_data_remote = create_server_connection(conn_data, destination, conn_data->listener);
+    conn_data->ms->not_need_remote = 0;
+    conn_data_remote->ms = conn_data->ms;
+    conn_data_remote->listener = conn_data->listener;
+    conn_data->ms->handshake = 2;
 
     if (pg_server)
         free (pg_server);
 
-    uv_read_stop(bev_arg->stream);
+    uv_read_stop(conn_data->stream);
 
     return 1;
 }

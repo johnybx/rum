@@ -12,26 +12,26 @@ void alloc_cb(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
 void
 on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 {
-    struct bev_arg *bev_arg = stream->data;
+    struct conn_data *conn_data = stream->data;
     int r;
     uv_stream_t *remote_stream;
 
     /* disable read timeout from server when we receive first data */
-    if (bev_arg->read_timer) {
-        uv_timer_stop(bev_arg->read_timer);
-        uv_close((uv_handle_t *)bev_arg->read_timer, on_close_timer);
-        bev_arg->read_timer = NULL;
+    if (conn_data->read_timer) {
+        uv_timer_stop(conn_data->read_timer);
+        uv_close((uv_handle_t *)conn_data->read_timer, on_close_timer);
+        conn_data->read_timer = NULL;
     }
 
     /* if remote stream exist */
-    if (bev_arg->remote) {
+    if (conn_data->remote) {
         /* if read return some data */
         if (nread > 0) {
             /* update stats */
-            if (bev_arg->type == BEV_CLIENT) {
-                bev_arg->listener->input_bytes += nread;
-            } else if (bev_arg->type == BEV_TARGET) {
-                bev_arg->listener->output_bytes += nread;
+            if (conn_data->type == CONN_CLIENT) {
+                conn_data->listener->input_bytes += nread;
+            } else if (conn_data->type == CONN_TARGET) {
+                conn_data->listener->output_bytes += nread;
             }
 
             /* send data to remote stream */
@@ -40,7 +40,7 @@ on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             sndbuf->base = buf->base;
             sndbuf->len = nread;
             req->data = sndbuf;
-            remote_stream = bev_arg->remote->stream;
+            remote_stream = conn_data->remote->stream;
             r = uv_write(req, remote_stream, sndbuf, 1, on_write);
             if (r) {
                 logmsg("%s: uv_write() failed: %s\n", __FUNCTION__, uv_strerror(r));
@@ -60,7 +60,7 @@ on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             /* there is tcp buffer so there is definitely some data, no need to buffer more data in rum */
             if (remote_stream->write_queue_size > 0) {
                 /* disable reading on input socket */
-                bev_arg->remote->read_stopped=1;
+                conn_data->remote->read_stopped=1;
                 uv_read_stop(stream);
             }
 
@@ -93,35 +93,35 @@ on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
  */
 void on_shutdown(uv_shutdown_t *shutdown, int status)
 {
-    struct bev_arg *bev_arg = shutdown->handle->data;
+    struct conn_data *conn_data = shutdown->handle->data;
 
     /* this can happend when client close connection before server send any data */
-    if (bev_arg->read_timer) {
-        uv_timer_stop(bev_arg->read_timer);
-        uv_close((uv_handle_t *)bev_arg->read_timer, on_close_timer);
-        bev_arg->read_timer = NULL;
+    if (conn_data->read_timer) {
+        uv_timer_stop(conn_data->read_timer);
+        uv_close((uv_handle_t *)conn_data->read_timer, on_close_timer);
+        conn_data->read_timer = NULL;
     }
 
     /* this can happend when client close connection before server accept connection */
-    if (bev_arg->connect_timer) {
-        uv_timer_stop(bev_arg->connect_timer);
-        uv_close((uv_handle_t *)bev_arg->connect_timer, on_close_timer);
-        bev_arg->connect_timer = NULL;
+    if (conn_data->connect_timer) {
+        uv_timer_stop(conn_data->connect_timer);
+        uv_close((uv_handle_t *)conn_data->connect_timer, on_close_timer);
+        conn_data->connect_timer = NULL;
     }
 
-    if (bev_arg->ms) {
-        free_ms (bev_arg->ms);
-        if (bev_arg->remote && bev_arg->remote->ms) {
-            bev_arg->remote->ms = NULL;
+    if (conn_data->ms) {
+        free_ms (conn_data->ms);
+        if (conn_data->remote && conn_data->remote->ms) {
+            conn_data->remote->ms = NULL;
         }
     }
 
-    if (bev_arg->remote && bev_arg->remote->stream) {
-        bev_arg->remote->remote = NULL;
-        uv_read_stop((uv_stream_t *)bev_arg->remote->stream);
+    if (conn_data->remote && conn_data->remote->stream) {
+        conn_data->remote->remote = NULL;
+        uv_read_stop((uv_stream_t *)conn_data->remote->stream);
 
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, bev_arg->remote->stream, on_shutdown)) {
+        if (uv_shutdown(shutdown, conn_data->remote->stream, on_shutdown)) {
             free(shutdown);
         }
     }
@@ -132,31 +132,31 @@ void on_shutdown(uv_shutdown_t *shutdown, int status)
 
 void on_connect_timeout (uv_timer_t *timer)
 {
-    struct bev_arg *bev_arg = timer->data;
+    struct conn_data *conn_data = timer->data;
 
     /* release timer */
     uv_timer_stop(timer);
     uv_close((uv_handle_t *)timer, on_close_timer);
 
     /* close socket */
-    bev_arg->connect_timer = NULL;
+    conn_data->connect_timer = NULL;
     /* we cannot call here uv_shutdown because it will fail (socket is not connected) */
-    bev_arg->uv_closed = 1;
-    uv_close((uv_handle_t *)bev_arg->stream, on_close);
+    conn_data->uv_closed = 1;
+    uv_close((uv_handle_t *)conn_data->stream, on_close);
 }
 
 void on_read_timeout (uv_timer_t *timer)
 {
-    struct bev_arg *bev_arg = timer->data;
+    struct conn_data *conn_data = timer->data;
 
     /* release timer */
     uv_timer_stop(timer);
     uv_close((uv_handle_t *)timer, on_close_timer);
 
     /* shutdown socket */
-    bev_arg->read_timer = NULL;
+    conn_data->read_timer = NULL;
     uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-    uv_shutdown(shutdown, bev_arg->stream, on_shutdown);
+    uv_shutdown(shutdown, conn_data->stream, on_shutdown);
 }
 
 void on_close_timer(uv_handle_t* handle)
@@ -166,14 +166,14 @@ void on_close_timer(uv_handle_t* handle)
 
 void on_close(uv_handle_t* handle)
 {
-    struct bev_arg *bev_arg = handle->data;
+    struct conn_data *conn_data = handle->data;
 
-    if (bev_arg->type == BEV_CLIENT) {
-        bev_arg->listener->nr_conn--;
+    if (conn_data->type == CONN_CLIENT) {
+        conn_data->listener->nr_conn--;
     }
 
     free(handle);
-    free(bev_arg);
+    free(conn_data);
 }
 
 void on_close_listener(uv_handle_t* handle)
@@ -184,14 +184,14 @@ void on_close_listener(uv_handle_t* handle)
 
 /* after every write release buffers */
 void on_write(uv_write_t* req, int status) {
-    struct bev_arg *bev_arg = req->handle->data;
+    struct conn_data *conn_data = req->handle->data;
 
     uv_buf_t *buf = (uv_buf_t *)req->data;
 
     /* if reading from remote socket was stopped because o non-zero write_queue, reenable reading  */
-    if (bev_arg->read_stopped && bev_arg->remote && req->handle->write_queue_size == 0) {
-        uv_read_start(bev_arg->remote->stream, alloc_cb, on_read);
-        bev_arg->read_stopped=0;
+    if (conn_data->read_stopped && conn_data->remote && req->handle->write_queue_size == 0) {
+        uv_read_start(conn_data->remote->stream, alloc_cb, on_read);
+        conn_data->read_stopped=0;
     }
 
     bufpool_release(buf->base);

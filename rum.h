@@ -123,21 +123,21 @@ struct destination
     struct destination *next;
 };
 
-/* every connection has 2 bev_arg, one for client socket and one for destination socket,
- * they are linked with bev_arg->remote ptr
+/* every connection has 2 conn_data, one for client socket and one for destination socket,
+ * they are linked with conn_data->remote ptr
 */
-struct bev_arg
+struct conn_data
 {
     uv_stream_t *stream;
-    struct bev_arg *remote;     /* bev_arg ptr to remote socket bev_arg */
+    struct conn_data *remote;     /* conn_data ptr to remote socket conn_data */
     struct listener *listener;  /* used for statistics */
     struct destination *failover_first_dst;
 
     /* client or destination */
     char type;
-#define BEV_CLIENT 1
-#define BEV_TARGET 2
-#define BEV_CACHE 3
+#define CONN_CLIENT 1
+#define CONN_TARGET 2
+#define CONN_CACHE 3
 
     /* if -M or -P is used, this structure hold some data used in mysql_callback.c/postgresql_callback.c */
     /* if not it is NULL */
@@ -158,7 +158,7 @@ struct mysql_mitm
 {
     char handshake;             /* current status of mysql handshake */
 
-    char not_need_remote;       /* if we use stored mysql init packet we dont need bev_arg->remote set to non NULL in some situations */
+    char not_need_remote;       /* if we use stored mysql init packet we dont need conn_data->remote set to non NULL in some situations */
 
     void *client_auth_packet; /* we save client first data here and resend it to server after we pickup one */
     int client_auth_packet_len;
@@ -189,12 +189,12 @@ void on_shutdown(uv_shutdown_t *shutdown, int status);
 void on_close_timer(uv_handle_t* handle);
 void on_close_listener(uv_handle_t* handle);
 void on_close(uv_handle_t* handle);
-struct bev_arg *create_server_connection(struct bev_arg *bev_arg_client, struct destination *destination, struct listener *listener);
+struct conn_data *create_server_connection(struct conn_data *conn_data_client, struct destination *destination, struct listener *listener);
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf);
 uv_stream_t *create_listen_socket (char *wwtf);
 void on_incoming_connection (uv_stream_t *server, int status);
 void prepareclient (char *wwtf, struct destination *destination);
-void failover(struct bev_arg *bev_target);
+void failover(struct conn_data *bev_target);
 
 /* parse_arg.c */
 void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
@@ -216,20 +216,20 @@ void mysql_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
 void postgresql_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
 
 /* postgresql_mitm.c */
-int pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
+int pg_handle_init_packet_from_client (struct conn_data *conn_data,
                                      const uv_buf_t *buf, size_t nread);
 int
-pg_handle_auth_with_server (struct bev_arg *bev_arg, const uv_buf_t *buf, size_t nread);
+pg_handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t *buf, size_t nread);
 
 /* mysql_mitm.c */
 struct mysql_mitm *init_ms ();
 void free_ms (struct mysql_mitm *ms);
 char *get_scramble_from_init_packet (char *packet, size_t len);
-int handle_init_packet_from_server (struct bev_arg *bev_arg,
+int handle_init_packet_from_server (struct conn_data *conn_data,
                                      const uv_buf_t *buf, size_t nread);
-int handle_auth_packet_from_client (struct bev_arg *bev_arg,
+int handle_auth_packet_from_client (struct conn_data *conn_data,
                                     const uv_buf_t *buf, size_t nread);
-int handle_auth_with_server (struct bev_arg *bev_arg, const uv_buf_t *buf, size_t nread);
+int handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t *buf, size_t nread);
 char *set_random_scramble_on_init_packet (char *packet, void *p1, void *p2);
 
 /* mysql_cdb.h */
