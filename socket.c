@@ -313,7 +313,13 @@ on_incoming_connection (uv_stream_t *server, int status)
 
             r = uv_read_start((uv_stream_t *)client, alloc_cb, mysql_on_read);
             if (r) {
-                fprintf(stderr, "uv_read_start failed\n");
+                logmsg("on_incoming_connection(): uv_read_start failed (%s)", uv_strerror(r));
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                if (uv_shutdown(shutdown, bev_arg_client->stream, on_shutdown)) {
+                    free(shutdown);
+                }
+
+                return;
             }
 
             uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
@@ -343,7 +349,12 @@ on_incoming_connection (uv_stream_t *server, int status)
 
             int r = uv_read_start((uv_stream_t *)client, alloc_cb, postgresql_on_read);
             if (r) {
-                fprintf(stderr, "uv_read_start failed\n");
+                logmsg("on_incoming_connection(): uv_read_start failed (%s)", uv_strerror(r));
+                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
+                if (uv_shutdown(shutdown, bev_arg_client->stream, on_shutdown)) {
+                    free(shutdown);
+                }
+
             }
             return;
         }

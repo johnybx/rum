@@ -39,8 +39,6 @@ postgresql_on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
     } else {
         /* remote stream doesn't exist, free self */
-        // TODO should not happend
-        fprintf(stderr, "xxxxx\n");
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
         uv_shutdown(shutdown, stream, on_shutdown);
     }

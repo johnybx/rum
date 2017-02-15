@@ -141,12 +141,13 @@ pg_handle_init_packet_from_client (struct bev_arg *bev_arg,
 
     /* if remote connection exists free it */
     if (bev_arg->remote) {
-        fprintf(stderr, "should not happend\n");
+        logmsg("pg_handle_init_packet_from_client(): bev_arg->remote is not NULL and should not be");
         free (bev_arg->remote);
     }
 
     if (!destination) {
         /* never happen ? */
+        logmsg("pg_handle_init_packet_from_client(): destination is NULL and should not be");
         if (pg_server)
             free (pg_server);
 

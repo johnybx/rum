@@ -93,8 +93,6 @@ get_scramble_from_init_packet (char *packet, size_t len)
     char *p;
     char *scramble;
 
-    fprintf(stderr,"x %d\n",len);
-
     if (len < MYSQL_PACKET_HEADER_SIZE + 1) {
         return NULL;
     }
@@ -321,13 +319,13 @@ handle_auth_packet_from_client (struct bev_arg *bev_arg,
 
     /* if remote connection exists free it */
     if (bev_arg->remote) {
-        fprintf(stderr, "should not happen\n");
+        logmsg("handle_auth_packet_from_client(): bev_arg->remote is not NULL and should not be");
         free (bev_arg->remote);
     }
 
 
     if (!destination) {
-        fprintf(stderr, "fuck\n");
+        logmsg("handle_auth_packet_from_client(): destination is NULL and should not be");
         uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
         if (uv_shutdown(shutdown, bev_arg->stream, on_shutdown)) {
             free(shutdown);
