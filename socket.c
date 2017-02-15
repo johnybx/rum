@@ -55,29 +55,29 @@ create_listen_socket (char *arg)
     if (type == SOCKET_TCP) {
         uv_os_fd_t fd;
         s = (struct sockaddr *) &sin;
-        tcp_t = malloc(sizeof(uv_tcp_t));
-        uv_tcp_init_ex(uv_default_loop(), tcp_t, AF_INET);
+        tcp_t = malloc (sizeof (uv_tcp_t));
+        uv_tcp_init_ex (uv_default_loop (), tcp_t, AF_INET);
         /* set SO_REUSEPORT so we can bind to tcp port when it is still used by running rum */
-        uv_fileno((uv_handle_t *)tcp_t, &fd);
+        uv_fileno ((uv_handle_t *) tcp_t, &fd);
         int optval = 1;
-        setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+        setsockopt (fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof (optval));
     } else if (type == SOCKET_UNIX) {
         s = (struct sockaddr *) &sun;
-        pipe_t = malloc(sizeof(uv_pipe_t));
-        uv_pipe_init(uv_default_loop(), pipe_t, 0);
+        pipe_t = malloc (sizeof (uv_pipe_t));
+        uv_pipe_init (uv_default_loop (), pipe_t, 0);
     } else {
         usage ();
         _exit (-1);
     }
 
     if (type == SOCKET_TCP) {
-        r = uv_tcp_bind(tcp_t, (const struct sockaddr*)s, 0);
+        r = uv_tcp_bind (tcp_t, (const struct sockaddr *) s, 0);
     } else if (type == SOCKET_UNIX) {
-        r = uv_pipe_bind(pipe_t, sun.sun_path);
+        r = uv_pipe_bind (pipe_t, sun.sun_path);
     }
 
     if (r) {
-        fprintf(stderr,"bind() to %s failed, exiting\n", arg);
+        fprintf (stderr, "bind() to %s failed, exiting\n", arg);
         _exit (-1);
     }
 
@@ -85,10 +85,10 @@ create_listen_socket (char *arg)
 
 
     if (type == SOCKET_TCP) {
-        uv_tcp_nodelay((uv_tcp_t *)tcp_t,1);
-        return (uv_stream_t *)tcp_t;
+        uv_tcp_nodelay ((uv_tcp_t *) tcp_t, 1);
+        return (uv_stream_t *) tcp_t;
     } else {
-        return (uv_stream_t *)pipe_t;
+        return (uv_stream_t *) pipe_t;
     }
 }
 
@@ -115,154 +115,164 @@ prepareclient (char *arg, struct destination *destination)
 
 /* after successful/not successful connect() */
 void
-on_outgoing_connection (uv_connect_t *connect, int status)
+on_outgoing_connection (uv_connect_t * connect, int status)
 {
     struct conn_data *conn_data = connect->data;
     int r;
     uv_stream_t *stream = connect->handle;
     struct destination *destination;
 
-    free(connect);
+    free (connect);
 
     if (conn_data->connect_timer) {
-        uv_timer_stop(conn_data->connect_timer);
-        uv_close((uv_handle_t *)conn_data->connect_timer, on_close_timer);
+        uv_timer_stop (conn_data->connect_timer);
+        uv_close ((uv_handle_t *) conn_data->connect_timer, on_close_timer);
         conn_data->connect_timer = NULL;
     }
 
-    if (status<0) {
+    if (status < 0) {
         /* if we hit connect_timeout, we already call uv_close() in on_connect_timeout() */
         /* calling it again will cause segfault */
         if (!conn_data->uv_closed) {
-            uv_close((uv_handle_t *)stream, on_close);
+            uv_close ((uv_handle_t *) stream, on_close);
         }
 
         if (mode == MODE_NORMAL) {
             /* connection failed, close client socket */
             if (conn_data->remote) {
-                conn_data->remote->remote=NULL;
-                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                uv_shutdown(shutdown, conn_data->remote->stream, on_shutdown);
+                conn_data->remote->remote = NULL;
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                uv_shutdown (shutdown, conn_data->remote->stream, on_shutdown);
             }
             return;
         } else if (mode == MODE_FAILOVER || mode == MODE_FAILOVER_R) {
             /* FAILOVER */
             if (conn_data->destination->next) {
                 /* select next server for connection */
-                logmsg("%s: failover: connection to %s failed (%s), connecting to next server %s", __FUNCTION__, conn_data->destination->s, uv_strerror(status), conn_data->destination->next->s);
+                logmsg
+                    ("%s: failover: connection to %s failed (%s), connecting to next server %s",
+                     __FUNCTION__, conn_data->destination->s,
+                     uv_strerror (status), conn_data->destination->next->s);
                 destination = conn_data->destination->next;
             } else {
-                logmsg("%s: failover: no server available, closing client connection", __FUNCTION__);
-                conn_data->remote->remote=NULL;
-                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                uv_shutdown(shutdown, conn_data->remote->stream, on_shutdown);
+                logmsg
+                    ("%s: failover: no server available, closing client connection",
+                     __FUNCTION__);
+                conn_data->remote->remote = NULL;
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                uv_shutdown (shutdown, conn_data->remote->stream, on_shutdown);
                 return;
             }
         }
- 
-        if (mode == MODE_FAILOVER || mode == MODE_FAILOVER_R || mode == MODE_FAILOVER_RR) {
+
+        if (mode == MODE_FAILOVER || mode == MODE_FAILOVER_R
+            || mode == MODE_FAILOVER_RR) {
             struct conn_data *conn_data_target;
-            conn_data_target = create_server_connection(conn_data->remote, destination, conn_data->listener);
+            conn_data_target =
+                create_server_connection (conn_data->remote, destination,
+                                          conn_data->listener);
             if (!conn_data_target) {
-                conn_data->remote->remote=NULL;
-                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                uv_shutdown(shutdown, conn_data->remote->stream, on_shutdown);
+                conn_data->remote->remote = NULL;
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                uv_shutdown (shutdown, conn_data->remote->stream, on_shutdown);
             }
         }
-    
+
         return;
     }
 
     conn_data->stream = stream;
 
-    uv_tcp_nodelay((uv_tcp_t *)stream, 1);
+    uv_tcp_nodelay ((uv_tcp_t *) stream, 1);
 
     /* on successfull connect */
     if (mysql_cdb_file) {
-        r = uv_read_start(stream, alloc_cb, mysql_on_read);
+        r = uv_read_start (stream, alloc_cb, mysql_on_read);
 
         if (r) {
         }
     } else if (postgresql_cdb_file) {
-        r = uv_read_start(stream, alloc_cb, on_read);
+        r = uv_read_start (stream, alloc_cb, on_read);
 
         if (r) {
         }
         /* send server client auth packet */
         if (conn_data->ms && conn_data->ms->client_auth_packet) {
-            uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
-            uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
-            newbuf->base=conn_data->ms->client_auth_packet;
-            newbuf->len=conn_data->ms->client_auth_packet_len;
+            uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+            uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+            newbuf->base = conn_data->ms->client_auth_packet;
+            newbuf->len = conn_data->ms->client_auth_packet_len;
             req->data = newbuf;
             conn_data->ms->client_auth_packet = NULL;
-            if (uv_write(req, stream, newbuf, 1, on_write_free)) {
-                logmsg ("%s: uv_write(postgresql client_auth_packet) failed", __FUNCTION__);
+            if (uv_write (req, stream, newbuf, 1, on_write_free)) {
+                logmsg ("%s: uv_write(postgresql client_auth_packet) failed",
+                        __FUNCTION__);
 
-                free(newbuf->base);
-                free(newbuf);
-                free(req);
+                free (newbuf->base);
+                free (newbuf);
+                free (req);
 
-                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                uv_shutdown(shutdown, stream, on_shutdown);
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                uv_shutdown (shutdown, stream, on_shutdown);
             }
 
         }
         /* change client callback to on_read */
-        r = uv_read_start(conn_data->remote->stream, alloc_cb, on_read);
+        r = uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
 
     } else {
-        r = uv_read_start(stream, alloc_cb, on_read);
+        r = uv_read_start (stream, alloc_cb, on_read);
 
         if (r) {
         }
 
         /* enable client read */
-        r = uv_read_start(conn_data->remote->stream, alloc_cb, on_read);
+        r = uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
 
         if (r) {
         }
     }
 
     /* set read timeout for server socket */
-    conn_data->read_timer = malloc(sizeof(uv_timer_t));
-    uv_timer_init(uv_default_loop(), conn_data->read_timer);
-    conn_data->read_timer->data=conn_data;
-    uv_timer_start(conn_data->read_timer, on_read_timeout, read_timeout * 1000, 0);
+    conn_data->read_timer = malloc (sizeof (uv_timer_t));
+    uv_timer_init (uv_default_loop (), conn_data->read_timer);
+    conn_data->read_timer->data = conn_data;
+    uv_timer_start (conn_data->read_timer, on_read_timeout,
+                    read_timeout * 1000, 0);
 }
 
 /*
  * accept() new connection from client
  */
 void
-on_incoming_connection (uv_stream_t *server, int status)
+on_incoming_connection (uv_stream_t * server, int status)
 {
     struct listener *listener = (struct listener *) server->data;
     struct conn_data *conn_data_client, *conn_data_target;
 
-    struct destination *destination=NULL;
+    struct destination *destination = NULL;
     int r;
 
     uv_stream_t *client;
     if (listener->type == SOCKET_TCP) {
-        client = malloc(sizeof(uv_tcp_t));
+        client = malloc (sizeof (uv_tcp_t));
     } else {
-        client = malloc(sizeof(uv_pipe_t));
+        client = malloc (sizeof (uv_pipe_t));
     }
 
     if (mode == MODE_NORMAL) {
-        destination=first_destination;
+        destination = first_destination;
     } else if (mode == MODE_FAILOVER || mode == MODE_FAILOVER_R) {
         /* use first but try second in case of fail */
         destination = first_destination;
     }
 
     client = malloc (sizeof (uv_tcp_t));
-    uv_tcp_init(uv_default_loop(), (uv_tcp_t *)client);
+    uv_tcp_init (uv_default_loop (), (uv_tcp_t *) client);
 
-    if (uv_accept(server, (uv_stream_t *)client)) {
+    if (uv_accept (server, (uv_stream_t *) client)) {
         logmsg ("%s: uv_accept failed", __FUNCTION__);
-        free(client);
+        free (client);
         return;
     }
 
@@ -290,11 +300,13 @@ on_incoming_connection (uv_stream_t *server, int status)
     if (listener->type == LISTENER_DEFAULT) {
         if (!mysql_cdb_file && !postgresql_cdb_file) {
             /* no cdb files, classic redirector */
-            conn_data_target = create_server_connection(conn_data_client, destination, listener);
+            conn_data_target =
+                create_server_connection (conn_data_client, destination,
+                                          listener);
             if (!conn_data_target) {
-                conn_data_client->remote=NULL;
-                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                uv_shutdown(shutdown, conn_data_client->stream, on_shutdown);
+                conn_data_client->remote = NULL;
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                uv_shutdown (shutdown, conn_data_client->stream, on_shutdown);
             }
         } else if (mysql_cdb_file) {
             /* if mysql_cdb is enabled, use different callback functions */
@@ -308,33 +320,38 @@ on_incoming_connection (uv_stream_t *server, int status)
             /* TODO: use better random input */
             conn_data_client->ms->scramble1 =
                 set_random_scramble_on_init_packet (cache_mysql_init_packet,
-                                                conn_data_client->stream,
-                                                conn_data_client->ms);
+                                                    conn_data_client->stream,
+                                                    conn_data_client->ms);
 
-            r = uv_read_start((uv_stream_t *)client, alloc_cb, mysql_on_read);
+            r = uv_read_start ((uv_stream_t *) client, alloc_cb,
+                               mysql_on_read);
             if (r) {
-                logmsg("%s: uv_read_start failed (%s)", __FUNCTION__, uv_strerror(r));
-                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                if (uv_shutdown(shutdown, conn_data_client->stream, on_shutdown)) {
-                    free(shutdown);
+                logmsg ("%s: uv_read_start failed (%s)", __FUNCTION__,
+                        uv_strerror (r));
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                if (uv_shutdown
+                    (shutdown, conn_data_client->stream, on_shutdown)) {
+                    free (shutdown);
                 }
 
                 return;
             }
 
-            uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
-            uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
-            newbuf->base=cache_mysql_init_packet;
-            newbuf->len=cache_mysql_init_packet_len;
+            uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+            uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+            newbuf->base = cache_mysql_init_packet;
+            newbuf->len = cache_mysql_init_packet_len;
             req->data = newbuf;
-            if (uv_write(req, client, newbuf, 1, on_write_nofree)) {
-                logmsg ("%s: uv_write(cache_mysql_init_packet) failed", __FUNCTION__);
-                free(newbuf);
-                free(req);
+            if (uv_write (req, client, newbuf, 1, on_write_nofree)) {
+                logmsg ("%s: uv_write(cache_mysql_init_packet) failed",
+                        __FUNCTION__);
+                free (newbuf);
+                free (req);
 
-                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                if (uv_shutdown(shutdown, conn_data_client->stream, on_shutdown)) {
-                    free(shutdown);
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                if (uv_shutdown
+                    (shutdown, conn_data_client->stream, on_shutdown)) {
+                    free (shutdown);
                 }
             }
 
@@ -347,12 +364,16 @@ on_incoming_connection (uv_stream_t *server, int status)
             conn_data_client->ms->not_need_remote = 1;
             conn_data_client->ms->handshake = 1;
 
-            int r = uv_read_start((uv_stream_t *)client, alloc_cb, postgresql_on_read);
+            int r =
+                uv_read_start ((uv_stream_t *) client, alloc_cb,
+                               postgresql_on_read);
             if (r) {
-                logmsg("%s: uv_read_start failed (%s)", __FUNCTION__, uv_strerror(r));
-                uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-                if (uv_shutdown(shutdown, conn_data_client->stream, on_shutdown)) {
-                    free(shutdown);
+                logmsg ("%s: uv_read_start failed (%s)", __FUNCTION__,
+                        uv_strerror (r));
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                if (uv_shutdown
+                    (shutdown, conn_data_client->stream, on_shutdown)) {
+                    free (shutdown);
                 }
 
             }
@@ -365,22 +386,28 @@ on_incoming_connection (uv_stream_t *server, int status)
 
 /* return conn_data structure */
 /* after un/successfull connection on_outgoing_connection() will be called */
-struct conn_data *create_server_connection(struct conn_data *conn_data_client, struct destination *destination, struct listener *listener)
+struct conn_data *
+create_server_connection (struct conn_data *conn_data_client,
+                          struct destination *destination,
+                          struct listener *listener)
 {
     uv_stream_t *target;
-    uv_connect_t* connect;
+    uv_connect_t *connect;
     struct conn_data *conn_data_target;
 
     if (destination->s[0] == SOCKET_TCP) {
         target = malloc (sizeof (uv_tcp_t));
-        uv_tcp_init(uv_default_loop(), (uv_tcp_t *)target);
-        connect = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-        uv_tcp_connect(connect, (uv_tcp_t *)target, (struct sockaddr *)&destination->sin, on_outgoing_connection);
+        uv_tcp_init (uv_default_loop (), (uv_tcp_t *) target);
+        connect = (uv_connect_t *) malloc (sizeof (uv_connect_t));
+        uv_tcp_connect (connect, (uv_tcp_t *) target,
+                        (struct sockaddr *) &destination->sin,
+                        on_outgoing_connection);
     } else {
         target = malloc (sizeof (uv_pipe_t));
-        uv_pipe_init(uv_default_loop(), (uv_pipe_t *)target, 0);
-        connect = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-        uv_pipe_connect(connect, (uv_pipe_t *)target, destination->sun.sun_path, on_outgoing_connection);
+        uv_pipe_init (uv_default_loop (), (uv_pipe_t *) target, 0);
+        connect = (uv_connect_t *) malloc (sizeof (uv_connect_t));
+        uv_pipe_connect (connect, (uv_pipe_t *) target,
+                         destination->sun.sun_path, on_outgoing_connection);
     }
 
     conn_data_target = malloc (sizeof (struct conn_data));
@@ -407,10 +434,11 @@ struct conn_data *create_server_connection(struct conn_data *conn_data_client, s
     target->data = conn_data_target;
 
     /* set connnect timeout timer */
-    conn_data_target->connect_timer = malloc(sizeof(uv_timer_t));
-    uv_timer_init(uv_default_loop(), conn_data_target->connect_timer);
-    conn_data_target->connect_timer->data=conn_data_target;
-    uv_timer_start(conn_data_target->connect_timer, on_connect_timeout, connect_timeout * 1000, 0);
+    conn_data_target->connect_timer = malloc (sizeof (uv_timer_t));
+    uv_timer_init (uv_default_loop (), conn_data_target->connect_timer);
+    conn_data_target->connect_timer->data = conn_data_target;
+    uv_timer_start (conn_data_target->connect_timer, on_connect_timeout,
+                    connect_timeout * 1000, 0);
 
     return conn_data_target;
 }

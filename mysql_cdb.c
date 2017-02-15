@@ -10,13 +10,13 @@ extern int cache_mysql_init_packet_len;
 void
 init_mysql_cdb_file (char *type)
 {
-    uv_fs_event_t *fs_event_req = malloc(sizeof(uv_fs_event_t));
-    uv_fs_event_init(uv_default_loop(), fs_event_req);
-    uv_fs_event_start(fs_event_req, reopen_cdb, mysql_cdb_file, 0);
-    
+    uv_fs_event_t *fs_event_req = malloc (sizeof (uv_fs_event_t));
+    uv_fs_event_init (uv_default_loop (), fs_event_req);
+    uv_fs_event_start (fs_event_req, reopen_cdb, mysql_cdb_file, 0);
+
     if (type == NULL) {
-        fprintf(stderr, "you must use -t type with -M\n");
-        exit(1);
+        fprintf (stderr, "you must use -t type with -M\n");
+        exit (1);
     } else {
         /* if we specify type of mysqlserver via -i mysql50|mysql51|mariadb55 we use hardcoded init packet */
         if (!strcmp (type, "mysql50")) {
@@ -56,7 +56,7 @@ init_mysql_cdb_file (char *type)
     }
 
     if ((cdb_fd = open (mysql_cdb_file, O_RDONLY)) == -1) {
-	    return;
+        return;
     } else {
         cdb_init (&cdb, cdb_fd);
     }
@@ -78,7 +78,7 @@ get_data_from_cdb (char *user, int user_len, char **mysql_server,
     char tmp[1024];
 
     if (cdb_fd == -1) {
-        logmsg("%s: cdb_fd == -1 (user %s)", __FUNCTION__, user);
+        logmsg ("%s: cdb_fd == -1 (user %s)", __FUNCTION__, user);
         return;
     }
 
@@ -92,7 +92,7 @@ get_data_from_cdb (char *user, int user_len, char **mysql_server,
     dlen = cdb_datalen (&cdb);
 
     if (dlen > sizeof (tmp)) {
-        logmsg("%s: dlen > sizeof (tmp) (user %s)", __FUNCTION__, user);
+        logmsg ("%s: dlen > sizeof (tmp) (user %s)", __FUNCTION__, user);
         return;
     }
 
@@ -106,12 +106,13 @@ get_data_from_cdb (char *user, int user_len, char **mysql_server,
 
 /* reopen mysql_cdb_file after inotify */
 void
-reopen_cdb (uv_fs_event_t *handle, const char *filename, int events, int status)
+reopen_cdb (uv_fs_event_t * handle, const char *filename, int events,
+            int status)
 {
     /* re-arm inotify watch before reopening file */
-    uv_fs_event_stop(handle);
-    uv_fs_event_init(uv_default_loop(), handle);
-    uv_fs_event_start(handle, reopen_cdb, mysql_cdb_file, 0);
+    uv_fs_event_stop (handle);
+    uv_fs_event_init (uv_default_loop (), handle);
+    uv_fs_event_start (handle, reopen_cdb, mysql_cdb_file, 0);
 
     if (cdb_fd != -1) {
         cdb_free (&cdb);
@@ -120,7 +121,7 @@ reopen_cdb (uv_fs_event_t *handle, const char *filename, int events, int status)
 
     if ((cdb_fd = open (mysql_cdb_file, O_RDONLY)) == -1) {
         cdb_fd = -1;
-        logmsg("%s: open failed (%s)", __FUNCTION__, strerror(errno));
+        logmsg ("%s: open failed (%s)", __FUNCTION__, strerror (errno));
         // TODO  - if file does not exist, rum will never watch over it, use some timeout || global & reinit after every cdb_data_from_cdb
     } else {
         cdb_init (&cdb, cdb_fd);

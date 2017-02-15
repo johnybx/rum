@@ -4,14 +4,14 @@ extern struct event_base *event_base;
 extern struct destination *first_destination;
 
 void
-postgresql_on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
+postgresql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
 {
     struct conn_data *conn_data = (struct conn_data *) stream->data;
 
     /* disable read timeout from server when we receive first data */
     if (conn_data->read_timer) {
-        uv_timer_stop(conn_data->read_timer);
-        uv_close((uv_handle_t *)conn_data->read_timer, on_close_timer);
+        uv_timer_stop (conn_data->read_timer);
+        uv_close ((uv_handle_t *) conn_data->read_timer, on_close_timer);
         conn_data->read_timer = NULL;
     }
 
@@ -26,22 +26,21 @@ postgresql_on_read (uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
             if (conn_data->type == CONN_CLIENT) {
                 /* first data from client */
-                pg_handle_init_packet_from_client
-                        (conn_data, buf, nread);
+                pg_handle_init_packet_from_client (conn_data, buf, nread);
             }
         } else if (nread < 0) {
-            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-            if (uv_shutdown(shutdown, stream, on_shutdown)) {
-                free(shutdown);
+            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+            if (uv_shutdown (shutdown, stream, on_shutdown)) {
+                free (shutdown);
             }
 
-        } /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release bufpool} */
-
+        }
+        /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release bufpool} */
     } else {
         /* remote stream doesn't exist, free self */
-        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        uv_shutdown(shutdown, stream, on_shutdown);
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        uv_shutdown (shutdown, stream, on_shutdown);
     }
 
-    bufpool_release(buf->base);
+    bufpool_release (buf->base);
 }

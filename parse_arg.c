@@ -27,7 +27,7 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
 
         *port = (uint16_t) atoi ((const char *) *port_str);
         memset (sin, 0, sizeof (struct sockaddr_in));
-        sin->sin_addr.s_addr = inet_addr(*host_str);
+        sin->sin_addr.s_addr = inet_addr (*host_str);
         sin->sin_port = htons (*port);
         sin->sin_family = AF_INET;
 

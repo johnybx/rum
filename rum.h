@@ -47,17 +47,18 @@
 #define SOCKET_TCP 't'
 #define SOCKET_UNIX 's'
 
-#define MODE_NORMAL 0 /* -d tcp:... */
-#define MODE_FAILOVER 1 /* -f tcp:...,tcp:... */
-#define MODE_FAILOVER_RR 2 /* -r tcp:...,tcp:... */
-#define MODE_FAILOVER_R 3 /* -R tcp:...,tcp:... */
+#define MODE_NORMAL 0           /* -d tcp:... */
+#define MODE_FAILOVER 1         /* -f tcp:...,tcp:... */
+#define MODE_FAILOVER_RR 2      /* -r tcp:...,tcp:... */
+#define MODE_FAILOVER_R 3       /* -R tcp:...,tcp:... */
 
 #define BUFPOOL_CAPACITY 100
 #define BUF_SIZE 64000
 
 typedef struct bufpool_s bufpool_t;
 
-struct bufpool_s {
+struct bufpool_s
+{
     void *first;
     int used;
     int size;
@@ -69,7 +70,8 @@ struct bufpool_s {
 
 typedef struct bufbase_s bufbase_t;
 
-struct bufbase_s {
+struct bufbase_s
+{
     bufpool_t *pool;
     void *next;
     int len;
@@ -78,23 +80,23 @@ struct bufbase_s {
 
 
 /* bufpool.c */
-void *bufpool_dummy();
-void *bufpool_grow(bufpool_t *pool);
-void bufpool_enqueue(bufpool_t *pool, void *ptr);
-void *bufpool_dequeue(bufpool_t *pool);
-void bufpool_init(bufpool_t *pool, int size);
-void bufpool_done(bufpool_t *pool);
-void alloc_cb(uv_handle_t *handle, size_t size, uv_buf_t *buf);
-void *bufpool_acquire(bufpool_t *pool, int *len);
-void *bufpool_alloc(bufpool_t *pool, int len);
-void bufpool_done(bufpool_t *pool);
-void bufpool_release(void *ptr);
-void bufpool_print_stats(uv_timer_t* handle);
+void *bufpool_dummy ();
+void *bufpool_grow (bufpool_t * pool);
+void bufpool_enqueue (bufpool_t * pool, void *ptr);
+void *bufpool_dequeue (bufpool_t * pool);
+void bufpool_init (bufpool_t * pool, int size);
+void bufpool_done (bufpool_t * pool);
+void alloc_cb (uv_handle_t * handle, size_t size, uv_buf_t * buf);
+void *bufpool_acquire (bufpool_t * pool, int *len);
+void *bufpool_alloc (bufpool_t * pool, int len);
+void bufpool_done (bufpool_t * pool);
+void bufpool_release (void *ptr);
+void bufpool_print_stats (uv_timer_t * handle);
 
 
 struct listener
 {
-    uv_stream_t *stream;                     /* listening stream */
+    uv_stream_t *stream;        /* listening stream */
     char *s;                    /* string (tcp:blah:blah or sock:blah) */
 
     /* statistics */
@@ -129,7 +131,7 @@ struct destination
 struct conn_data
 {
     uv_stream_t *stream;
-    struct conn_data *remote;     /* conn_data ptr to remote socket conn_data */
+    struct conn_data *remote;   /* conn_data ptr to remote socket conn_data */
     struct listener *listener;  /* used for statistics */
     struct destination *failover_first_dst;
 
@@ -160,7 +162,7 @@ struct mysql_mitm
 
     char not_need_remote;       /* if we use stored mysql init packet we dont need conn_data->remote set to non NULL in some situations */
 
-    void *client_auth_packet; /* we save client first data here and resend it to server after we pickup one */
+    void *client_auth_packet;   /* we save client first data here and resend it to server after we pickup one */
     int client_auth_packet_len;
 
     /* for every connection filled with random string */
@@ -182,19 +184,21 @@ void logmsg (const char *fmt, ...);
 int get_num_fds ();
 void add_destination (char *ptr);
 void randomize_destinations (void);
-void shuffle(struct destination **array, size_t n);
+void shuffle (struct destination **array, size_t n);
 
 /* socket.c */
-void on_shutdown(uv_shutdown_t *shutdown, int status);
-void on_close_timer(uv_handle_t* handle);
-void on_close_listener(uv_handle_t* handle);
-void on_close(uv_handle_t* handle);
-struct conn_data *create_server_connection(struct conn_data *conn_data_client, struct destination *destination, struct listener *listener);
-void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf);
+void on_shutdown (uv_shutdown_t * shutdown, int status);
+void on_close_timer (uv_handle_t * handle);
+void on_close_listener (uv_handle_t * handle);
+void on_close (uv_handle_t * handle);
+struct conn_data *create_server_connection (struct conn_data *conn_data_client,
+                                            struct destination *destination,
+                                            struct listener *listener);
+void alloc_buffer (uv_handle_t * handle, size_t size, uv_buf_t * buf);
 uv_stream_t *create_listen_socket (char *wwtf);
-void on_incoming_connection (uv_stream_t *server, int status);
+void on_incoming_connection (uv_stream_t * server, int status);
 void prepareclient (char *wwtf, struct destination *destination);
-void failover(struct conn_data *bev_target);
+void failover (struct conn_data *bev_target);
 
 /* parse_arg.c */
 void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
@@ -204,51 +208,57 @@ void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
 
 /* default_callback.c */
 
-void on_write(uv_write_t* req, int status);
-void on_write_then_close(uv_write_t* req, int status);
-void on_write_free(uv_write_t* req, int status);
-void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
+void on_write (uv_write_t * req, int status);
+void on_write_then_close (uv_write_t * req, int status);
+void on_write_free (uv_write_t * req, int status);
+void on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
 
 /* mysql_callback.c */
-void mysql_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
+void mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
 
 /* postgresql_callback.c */
-void postgresql_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
+void postgresql_on_read (uv_stream_t * stream, ssize_t nread,
+                         const uv_buf_t * buf);
 
 /* postgresql_mitm.c */
 int pg_handle_init_packet_from_client (struct conn_data *conn_data,
-                                     const uv_buf_t *buf, size_t nread);
+                                       const uv_buf_t * buf, size_t nread);
 int
-pg_handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t *buf, size_t nread);
+pg_handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * buf,
+                            size_t nread);
 
 /* mysql_mitm.c */
 struct mysql_mitm *init_ms ();
 void free_ms (struct mysql_mitm *ms);
 char *get_scramble_from_init_packet (char *packet, size_t len);
 int handle_init_packet_from_server (struct conn_data *conn_data,
-                                     const uv_buf_t *buf, size_t nread);
+                                    const uv_buf_t * buf, size_t nread);
 int handle_auth_packet_from_client (struct conn_data *conn_data,
-                                    const uv_buf_t *buf, size_t nread);
-int handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t *buf, size_t nread);
+                                    const uv_buf_t * buf, size_t nread);
+int handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * buf,
+                             size_t nread);
 char *set_random_scramble_on_init_packet (char *packet, void *p1, void *p2);
 
 /* mysql_cdb.h */
 void init_mysql_cdb_file ();
 void get_data_from_cdb (char *user, int user_len, char **mysql_server,
                         char **mysql_password);
-void reopen_cdb (uv_fs_event_t *handle, const char *filename, int events, int status);
+void reopen_cdb (uv_fs_event_t * handle, const char *filename, int events,
+                 int status);
 
 /* postgresql_cdb.h */
 void init_postgresql_cdb_file ();
-void get_data_from_cdb_postgresql (char *user, int user_len, char **postgresql_server);
-void reopen_cdb_postgresql (uv_fs_event_t *handle, const char *filename, int events, int status);
+void get_data_from_cdb_postgresql (char *user, int user_len,
+                                   char **postgresql_server);
+void reopen_cdb_postgresql (uv_fs_event_t * handle, const char *filename,
+                            int events, int status);
 
 
 /* stats.c */
-void send_stats_to_client (uv_stream_t *stream);
+void send_stats_to_client (uv_stream_t * stream);
 
-void on_read_timeout (uv_timer_t *timer);
-void on_connect_timeout (uv_timer_t *timer);
-void on_write(uv_write_t* req, int status);
-void on_write_free(uv_write_t* req, int status);
-void on_write_nofree(uv_write_t* req, int status);
+void on_read_timeout (uv_timer_t * timer);
+void on_connect_timeout (uv_timer_t * timer);
+void on_write (uv_write_t * req, int status);
+void on_write_free (uv_write_t * req, int status);
+void on_write_nofree (uv_write_t * req, int status);

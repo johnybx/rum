@@ -24,9 +24,10 @@ int server_keepcnt = 0;
 int server_keepidle = 0;
 int server_keepintvl = 0;
 
-void signal_handler(uv_signal_t *handle, int signum)
+void
+signal_handler (uv_signal_t * handle, int signum)
 {
-    uv_stop(uv_default_loop());
+    uv_stop (uv_default_loop ());
 }
 
 
@@ -36,7 +37,7 @@ main (int ac, char *av[])
     int ret, ch, daemonize = 0;
     char *logfile = NULL;
     int i, ok;
-    char *tmp,*ptr;
+    char *tmp, *ptr;
     uv_signal_t *sigint;
     uv_signal_t *sigterm;
 
@@ -56,21 +57,21 @@ main (int ac, char *av[])
     setenv ("TZ", ":/etc/localtime", 0);
     tzset ();
 
-    memset (logstring, '\0', sizeof(logstring));
+    memset (logstring, '\0', sizeof (logstring));
     for (i = 0; i < ac; i++) {
-        if (strlen(logstring)+strlen(av[i])>=sizeof(logstring)) {
+        if (strlen (logstring) + strlen (av[i]) >= sizeof (logstring)) {
             break;
         }
-        strcat(logstring, av[i]);
+        strcat (logstring, av[i]);
 
         if (i != ac - 1) {
-            strcat(logstring, " ");
+            strcat (logstring, " ");
         }
     }
 
-    pool =  malloc(sizeof(*pool));
+    pool = malloc (sizeof (*pool));
 
-    bufpool_init(pool, 64000);
+    bufpool_init (pool, 64000);
 
 /*
     uv_timer_t *handle;
@@ -80,14 +81,14 @@ main (int ac, char *av[])
 */
 
 
-    sigint = malloc(sizeof(uv_signal_t));
-    sigterm = malloc(sizeof(uv_signal_t));
-    uv_signal_init(uv_default_loop(), sigint);
-    uv_signal_init(uv_default_loop(), sigterm);
-    uv_signal_start(sigint, signal_handler, SIGINT);
-    uv_signal_start(sigterm, signal_handler, SIGTERM);
+    sigint = malloc (sizeof (uv_signal_t));
+    sigterm = malloc (sizeof (uv_signal_t));
+    uv_signal_init (uv_default_loop (), sigint);
+    uv_signal_init (uv_default_loop (), sigterm);
+    uv_signal_start (sigint, signal_handler, SIGINT);
+    uv_signal_start (sigterm, signal_handler, SIGTERM);
 
-    openlog("rum", LOG_NDELAY|LOG_PID, LOG_DAEMON);
+    openlog ("rum", LOG_NDELAY | LOG_PID, LOG_DAEMON);
 
     if (ac == 1) {
         usage ();
@@ -104,49 +105,58 @@ main (int ac, char *av[])
 
     int option_index = 0;
     static struct option long_options[] = {
-        {"background",  no_argument,       0, 'b' },
-        {"destination", required_argument, 0, 'd' },
-        {"source",      required_argument, 0, 's' },
-        {"stats",       required_argument, 0, 'm' },
-        {"logfile",     required_argument, 0, 'l'},
-        {"mysql-cdb",   required_argument, 0,  'M' },
-        {"postgresql-cdb",   required_argument, 0,  'P' },
-        {"mysqltype",   required_argument, 0,  't' },
-        {"failover-r",   required_argument, 0,  'R' },
-        {"failover",   required_argument, 0,  'f' },
-        {"read-timeout",   required_argument, 0,  0 },
-        {"connect-timeout",   required_argument, 0,  0 },
-        {"client-keepalive",   no_argument, &client_keepalive,  1 },
-        {"client-keepcnt",   required_argument, 0,  0 },
-        {"client-keepidle",   required_argument, 0,  0 },
-        {"client-keepintvl",   required_argument, 0,  0 },
-        {"server-keepalive",   no_argument, &server_keepalive,  1 },
-        {"server-keepcnt",   required_argument, 0,  0 },
-        {"server-keepidle",   required_argument, 0,  0 },
-        {"server-keepintvl",   required_argument, 0,  0 },
-        {0,         0,                 0,  0 }
+        {"background", no_argument, 0, 'b'},
+        {"destination", required_argument, 0, 'd'},
+        {"source", required_argument, 0, 's'},
+        {"stats", required_argument, 0, 'm'},
+        {"logfile", required_argument, 0, 'l'},
+        {"mysql-cdb", required_argument, 0, 'M'},
+        {"postgresql-cdb", required_argument, 0, 'P'},
+        {"mysqltype", required_argument, 0, 't'},
+        {"failover-r", required_argument, 0, 'R'},
+        {"failover", required_argument, 0, 'f'},
+        {"read-timeout", required_argument, 0, 0},
+        {"connect-timeout", required_argument, 0, 0},
+        {"client-keepalive", no_argument, &client_keepalive, 1},
+        {"client-keepcnt", required_argument, 0, 0},
+        {"client-keepidle", required_argument, 0, 0},
+        {"client-keepintvl", required_argument, 0, 0},
+        {"server-keepalive", no_argument, &server_keepalive, 1},
+        {"server-keepcnt", required_argument, 0, 0},
+        {"server-keepidle", required_argument, 0, 0},
+        {"server-keepintvl", required_argument, 0, 0},
+        {0, 0, 0, 0}
     };
 
 
-    while ((ch = getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:", long_options, &option_index)) != -1) {
+    while ((ch =
+            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:", long_options,
+                         &option_index)) != -1) {
         switch (ch) {
         case 0:
-            if (strcmp(long_options[option_index].name,"read-timeout") == 0)
-                read_timeout = atoi(optarg);
-            if (strcmp(long_options[option_index].name,"connect-timeout") == 0)
-                connect_timeout = atoi(optarg);
-            if (strcmp(long_options[option_index].name,"client-keepcnt") == 0)
-                client_keepcnt = atoi(optarg);
-            if (strcmp(long_options[option_index].name,"client-keepidle") == 0)
-                client_keepidle = atoi(optarg);
-            if (strcmp(long_options[option_index].name,"client-keepintvl") == 0)
-                client_keepintvl = atoi(optarg);
-            if (strcmp(long_options[option_index].name,"server-keepcnt") == 0)
-                server_keepcnt = atoi(optarg);
-            if (strcmp(long_options[option_index].name,"server-keepidle") == 0)
-                server_keepidle = atoi(optarg);
-            if (strcmp(long_options[option_index].name,"server-keepintvl") == 0)
-                server_keepintvl = atoi(optarg);
+            if (strcmp (long_options[option_index].name, "read-timeout") == 0)
+                read_timeout = atoi (optarg);
+            if (strcmp (long_options[option_index].name, "connect-timeout") ==
+                0)
+                connect_timeout = atoi (optarg);
+            if (strcmp (long_options[option_index].name, "client-keepcnt") ==
+                0)
+                client_keepcnt = atoi (optarg);
+            if (strcmp (long_options[option_index].name, "client-keepidle") ==
+                0)
+                client_keepidle = atoi (optarg);
+            if (strcmp (long_options[option_index].name, "client-keepintvl") ==
+                0)
+                client_keepintvl = atoi (optarg);
+            if (strcmp (long_options[option_index].name, "server-keepcnt") ==
+                0)
+                server_keepcnt = atoi (optarg);
+            if (strcmp (long_options[option_index].name, "server-keepidle") ==
+                0)
+                server_keepidle = atoi (optarg);
+            if (strcmp (long_options[option_index].name, "server-keepintvl") ==
+                0)
+                server_keepintvl = atoi (optarg);
 
 
 
@@ -199,41 +209,41 @@ main (int ac, char *av[])
             mysqltype = optarg;
             break;
         case 'f':
-            mode=MODE_FAILOVER;
-            ptr=tmp=strdup(optarg);
-            i=0;
-            while(tmp[i]!='\0') {
-                if (tmp[i]==',') {
-                    tmp[i]='\0';
-                    add_destination(ptr);
+            mode = MODE_FAILOVER;
+            ptr = tmp = strdup (optarg);
+            i = 0;
+            while (tmp[i] != '\0') {
+                if (tmp[i] == ',') {
+                    tmp[i] = '\0';
+                    add_destination (ptr);
                     destinations++;
-                    ptr=tmp+i+1;
+                    ptr = tmp + i + 1;
                 }
                 i++;
             }
 
-            add_destination(ptr);
+            add_destination (ptr);
             destinations++;
 
             break;
 
         case 'R':
-            mode=MODE_FAILOVER_R;
-            ptr=tmp=strdup(optarg);
-            i=0;
-            while(tmp[i]!='\0') {
-                if (tmp[i]==',') {
-                    tmp[i]='\0';
-                    add_destination(ptr);
+            mode = MODE_FAILOVER_R;
+            ptr = tmp = strdup (optarg);
+            i = 0;
+            while (tmp[i] != '\0') {
+                if (tmp[i] == ',') {
+                    tmp[i] = '\0';
+                    add_destination (ptr);
                     destinations++;
-                    ptr=tmp+i+1;
+                    ptr = tmp + i + 1;
                 }
                 i++;
             }
 
-            add_destination(ptr);
+            add_destination (ptr);
             destinations++;
-            randomize_destinations();
+            randomize_destinations ();
 
             break;
 
@@ -282,24 +292,27 @@ main (int ac, char *av[])
 
     /* add all listen (-s -m) ports to event_base, if someone connect: accept_connect is executed with struct listener argument */
     for (listener = first_listener; listener; listener = listener->next) {
-        for (i=0,ok=0;i<10;i++) {
+        for (i = 0, ok = 0; i < 10; i++) {
             listener->stream = create_listen_socket (listener->s);
             listener->stream->data = listener;
-            int r = uv_listen((uv_stream_t *)listener->stream, -1, on_incoming_connection);
+            int r =
+                uv_listen ((uv_stream_t *) listener->stream, -1,
+                           on_incoming_connection);
 
             if (r) {
-                fprintf(stderr, "listen to %s failed, retrying\n", listener->s);
-                uv_close((uv_handle_t *)listener->stream, on_close_listener);
-                usleep(200*1000);
+                fprintf (stderr, "listen to %s failed, retrying\n",
+                         listener->s);
+                uv_close ((uv_handle_t *) listener->stream, on_close_listener);
+                usleep (200 * 1000);
             } else {
-                fprintf(stdout, "listening on %s\n", listener->s);
-                ok=1;
+                fprintf (stdout, "listening on %s\n", listener->s);
+                ok = 1;
                 break;
             }
         }
 
-        if (ok==0) {
-            fprintf(stderr,"listen to %s failed, exiting\n", listener->s);
+        if (ok == 0) {
+            fprintf (stderr, "listen to %s failed, exiting\n", listener->s);
             _exit (-1);
         }
 
@@ -310,11 +323,11 @@ main (int ac, char *av[])
     }
 
     /* main libevent loop */
-    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+    uv_run (uv_default_loop (), UV_RUN_DEFAULT);
 
     /* SIGINT || SIGTERM received, clean up */
-    bufpool_done(pool);
-    free(pool);
+    bufpool_done (pool);
+    free (pool);
 
     if (mysql_cdb_file) {
         free (mysql_cdb_file);
@@ -329,13 +342,13 @@ main (int ac, char *av[])
     dst = first_destination;
     while (dst) {
         destination = dst->next;
-        free(dst->s);
-        free(dst);
+        free (dst->s);
+        free (dst);
         dst = destination;
     }
 
-    free(sigint);
-    free(sigterm);
+    free (sigint);
+    free (sigterm);
 
     exit (0);
 }
@@ -356,10 +369,10 @@ logmsg (const char *fmt, ...)
     char tmpmsg[4096];
 
     va_start (args, fmt);
-    vsnprintf (tmpmsg, sizeof(tmpmsg), fmt, args);
+    vsnprintf (tmpmsg, sizeof (tmpmsg), fmt, args);
     va_end (args);
 
-    syslog(LOG_DAEMON|LOG_WARNING, "[%s] %s", logstring, tmpmsg);
+    syslog (LOG_DAEMON | LOG_WARNING, "[%s] %s", logstring, tmpmsg);
 
 }
 
@@ -382,7 +395,8 @@ get_num_fds ()
     return fd_count;
 }
 
-void add_destination (char *ptr)
+void
+add_destination (char *ptr)
 {
     struct destination *destination = NULL, *dst;
 
@@ -406,40 +420,40 @@ void add_destination (char *ptr)
     return;
 }
 
-void randomize_destinations ()
+void
+randomize_destinations ()
 {
     struct destination *array[destinations], *dst;
     int i;
 
-    for (i = 0, dst = first_destination ; i < destinations ; i++) {
-        array[i]=dst;
-        dst=dst->next;
+    for (i = 0, dst = first_destination; i < destinations; i++) {
+        array[i] = dst;
+        dst = dst->next;
     }
 
-    shuffle(array, destinations);
+    shuffle (array, destinations);
 
 
     dst = first_destination = array[0];
-    for (i = 1 ; i < destinations ; i++) {
-        dst->next=array[i];
-        dst=dst->next;
+    for (i = 1; i < destinations; i++) {
+        dst->next = array[i];
+        dst = dst->next;
     }
 
-    dst->next=NULL;
+    dst->next = NULL;
 }
 
-void shuffle(struct destination **array, size_t n)
+void
+shuffle (struct destination **array, size_t n)
 {
-    srand(time(NULL));
-    if (n > 1)
-    {
+    srand (time (NULL));
+    if (n > 1) {
         size_t i;
-        for (i = 0; i < n - 1; i++)
-        {
-          size_t j = i + rand() / (RAND_MAX / (n - i) + 1);
-          struct destination *t = array[j];
-          array[j] = array[i];
-          array[i] = t;
+        for (i = 0; i < n - 1; i++) {
+            size_t j = i + rand () / (RAND_MAX / (n - i) + 1);
+            struct destination *t = array[j];
+            array[j] = array[i];
+            array[i] = t;
         }
     }
 }

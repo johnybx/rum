@@ -148,7 +148,7 @@ set_random_scramble_on_init_packet (char *packet, void *p1, void *p2)
 
 int
 handle_init_packet_from_server (struct conn_data *conn_data,
-                                const uv_buf_t *uv_buf, size_t nread)
+                                const uv_buf_t * uv_buf, size_t nread)
 {
     char mysql_server_init_packet[4096];
     conn_data->ms->handshake = 1;
@@ -157,9 +157,9 @@ handle_init_packet_from_server (struct conn_data *conn_data,
     if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_INIT_PACKET_MIN_SIZE ||
         nread > sizeof (mysql_server_init_packet)) {
 
-        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-            free(shutdown);
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
         }
 
         return 1;
@@ -175,7 +175,7 @@ handle_init_packet_from_server (struct conn_data *conn_data,
 
 int
 handle_auth_packet_from_client (struct conn_data *conn_data,
-                                const uv_buf_t *uv_buf, size_t nread)
+                                const uv_buf_t * uv_buf, size_t nread)
 {
     char user[64];
     char buf[512];
@@ -187,32 +187,38 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
     /* check if size ends in user[1], so user has at least 1 char */
     if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1) {
         conn_data->listener->nr_conn--;
-        
-        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-            free(shutdown);
+
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
         }
 
-        logmsg("%s: warning: invalid client packet size (packet too small)", __FUNCTION__);
+        logmsg ("%s: warning: invalid client packet size (packet too small)",
+                __FUNCTION__);
         return 1;
     }
 
     conn_data->ms->client_auth_packet_len = nread;
     conn_data->ms->client_auth_packet = malloc (nread);
-    memcpy(conn_data->ms->client_auth_packet, uv_buf->base, nread);
+    memcpy (conn_data->ms->client_auth_packet, uv_buf->base, nread);
 
     userptr =
         conn_data->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS;
     /* limit strnlen to packet length without HEADER */
-    user_len = strnlen (userptr, nread - MYSQL_PACKET_HEADER_SIZE - MYSQL_AUTH_PACKET_USER_POS);
-    if (user_len > sizeof(user)-1) {
-        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-            free(shutdown);
+    user_len =
+        strnlen (userptr,
+                 nread - MYSQL_PACKET_HEADER_SIZE -
+                 MYSQL_AUTH_PACKET_USER_POS);
+    if (user_len > sizeof (user) - 1) {
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
         }
 
-        logmsg("%s: warning: invalid client packet size (user_len > sizeof(user)-1)", __FUNCTION__);
+        logmsg
+            ("%s: warning: invalid client packet size (user_len > sizeof(user)-1)",
+             __FUNCTION__);
 
         return 1;
 
@@ -222,23 +228,27 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
              MYSQL_AUTH_PACKET_USER_POS, user_len);
     user[user_len] = '\0';
 
-    get_data_from_cdb (user, user_len, &mysql_server, &conn_data->ms->password);
+    get_data_from_cdb (user, user_len, &mysql_server,
+                       &conn_data->ms->password);
 
     /* another size check if we know user_len, there must be at least 21 bytes after username
-    * 1 byte length
-    * 20 bytes scramble data
-    * https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
-    * https://dev.mysql.com/doc/internals/en/secure-password-authentication.html
-    *
-    * we dont support other types of auth
-    */
-    if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1 + user_len + 1 + SCRAMBLE_LENGTH) {
-        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-            free(shutdown);
+     * 1 byte length
+     * 20 bytes scramble data
+     * https://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
+     * https://dev.mysql.com/doc/internals/en/secure-password-authentication.html
+     *
+     * we dont support other types of auth
+     */
+    if (nread <
+        MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1 + user_len +
+        1 + SCRAMBLE_LENGTH) {
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
         }
 
-        logmsg("%s: invalid client packet size (packet too small 2)", __FUNCTION__);
+        logmsg ("%s: invalid client packet size (packet too small 2)",
+                __FUNCTION__);
 
         return 1;
     }
@@ -256,7 +266,8 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
         conn_data->ms->hash_stage1 = malloc (SHA1_HASH_SIZE);
 
-        get_hash_stage1 (c, conn_data->ms->scramble1, conn_data->ms->hash_stage2,
+        get_hash_stage1 (c, conn_data->ms->scramble1,
+                         conn_data->ms->hash_stage2,
                          conn_data->ms->hash_stage1);
     }
 
@@ -274,7 +285,8 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
                 prepareclient (mysql_server, destination);
             }
         } else {
-            first_destination = destination = malloc (sizeof (struct destination));
+            first_destination = destination =
+                malloc (sizeof (struct destination));
             prepareclient (mysql_server, destination);
         }
     } else {
@@ -283,31 +295,36 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
          */
         destination = first_destination;
 
-        logmsg("%s: user %s not found in cdb", __FUNCTION__, user);
+        logmsg ("%s: user %s not found in cdb", __FUNCTION__, user);
         /* we reply access denied  */
-        memcpy (buf, ERR_LOGIN_PACKET_PREFIX, sizeof(ERR_LOGIN_PACKET_PREFIX));
-        buflen = snprintf (buf + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1, sizeof(buf) - sizeof(ERR_LOGIN_PACKET_PREFIX), "Access denied, unknown user '%s'", user);
-        buf[0] = buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 5;
+        memcpy (buf, ERR_LOGIN_PACKET_PREFIX,
+                sizeof (ERR_LOGIN_PACKET_PREFIX));
+        buflen =
+            snprintf (buf + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1,
+                      sizeof (buf) - sizeof (ERR_LOGIN_PACKET_PREFIX),
+                      "Access denied, unknown user '%s'", user);
+        buf[0] = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 5;
 
-        uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
-        uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
-        int newlen = buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1;
-        newbuf->base = bufpool_acquire(pool, &newlen);
+        uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+        uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+        int newlen = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1;
+        newbuf->base = bufpool_acquire (pool, &newlen);
 
-        memcpy(newbuf->base, buf, buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1);
-        newbuf->len=buflen + sizeof(ERR_LOGIN_PACKET_PREFIX) - 1;
-        req->data=newbuf;
-        if (uv_write(req, conn_data->stream, newbuf, 1, on_write)) {
-            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-            if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-                free(shutdown);
+        memcpy (newbuf->base, buf,
+                buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
+        newbuf->len = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1;
+        req->data = newbuf;
+        if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
+            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                free (shutdown);
             }
             return 1;
         }
 
-        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-            free(shutdown);
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
         }
 
 
@@ -319,16 +336,17 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
     /* if remote connection exists free it */
     if (conn_data->remote) {
-        logmsg("%s: conn_data->remote is not NULL and should not be", __FUNCTION__);
+        logmsg ("%s: conn_data->remote is not NULL and should not be",
+                __FUNCTION__);
         free (conn_data->remote);
     }
 
 
     if (!destination) {
-        logmsg("%s: destination is NULL and should not be", __FUNCTION__);
-        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-            free(shutdown);
+        logmsg ("%s: destination is NULL and should not be", __FUNCTION__);
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
         }
         if (mysql_server)
             free (mysql_server);
@@ -336,7 +354,8 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         return 1;
     }
 
-    conn_data_remote = create_server_connection(conn_data, destination, conn_data->listener);
+    conn_data_remote =
+        create_server_connection (conn_data, destination, conn_data->listener);
     conn_data->ms->not_need_remote = 0;
     conn_data_remote->ms = conn_data->ms;
     conn_data_remote->listener = conn_data->listener;
@@ -349,7 +368,8 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 }
 
 int
-handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t *uv_buf, size_t nread)
+handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
+                         size_t nread)
 {
     char *user;
     int user_len;
@@ -358,9 +378,9 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t *uv_buf, si
 
     if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_INIT_PACKET_MIN_SIZE
         || nread > sizeof (mysql_server_init_packet)) {
-        uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-        if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-            free(shutdown);
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
         }
 
         return 1;
@@ -386,40 +406,41 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t *uv_buf, si
                                    conn_data->ms->hash_stage1);
     }
 
-    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
-    uv_buf_t *newbuf = malloc(sizeof(uv_buf_t));
+    uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+    uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
     int newlen = conn_data->ms->client_auth_packet_len;
-    newbuf->base = bufpool_acquire(pool, &newlen);
+    newbuf->base = bufpool_acquire (pool, &newlen);
 
-    memcpy(newbuf->base,conn_data->ms->client_auth_packet, conn_data->ms->client_auth_packet_len);
-    newbuf->len=conn_data->ms->client_auth_packet_len;
-    req->data=newbuf;
-    if (uv_write(req, conn_data->stream, newbuf, 1, on_write)) {
-            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-            if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-                free(shutdown);
-            }
-            bufpool_release(newbuf->base);
+    memcpy (newbuf->base, conn_data->ms->client_auth_packet,
+            conn_data->ms->client_auth_packet_len);
+    newbuf->len = conn_data->ms->client_auth_packet_len;
+    req->data = newbuf;
+    if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
+        }
+        bufpool_release (newbuf->base);
     }
 
     free_ms (conn_data->ms);
     conn_data->ms = NULL;
     conn_data->remote->ms = NULL;
 
-    if (uv_read_start(conn_data->stream, alloc_cb, on_read)) {
-            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-            if (uv_shutdown(shutdown, conn_data->stream, on_shutdown)) {
-                free(shutdown);
-            }
-            return 0;
+    if (uv_read_start (conn_data->stream, alloc_cb, on_read)) {
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
+        }
+        return 0;
 
     }
-    if (uv_read_start(conn_data->remote->stream, alloc_cb, on_read)) {
-            uv_shutdown_t *shutdown = malloc(sizeof(uv_shutdown_t));
-            if (uv_shutdown(shutdown, conn_data->remote->stream, on_shutdown)) {
-                free(shutdown);
-            }
-            return 0;
+    if (uv_read_start (conn_data->remote->stream, alloc_cb, on_read)) {
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->remote->stream, on_shutdown)) {
+            free (shutdown);
+        }
+        return 0;
     }
 
     return 1;
