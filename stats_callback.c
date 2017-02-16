@@ -21,14 +21,14 @@ send_stats_to_client (uv_stream_t * stream)
     uv_shutdown_t *shutdown;
 
     if (!destination) {
+        /* if destination is not initialized close connection */
+        shutdown = malloc (sizeof (uv_shutdown_t));
+        uv_shutdown (shutdown, stream, on_shutdown);
         return;
     }
 
     len =
-        snprintf (tmp, STATS_BUF_SIZE,
-                  "[%20s] [   %10s] [%20s] [%15s] [%18s]\n", "source", "bytes",
-                  "destination", "all connections", "actual connections");
-
+        snprintf (tmp, STATS_BUF_SIZE, "{\n\"listeners\": [\n");
     req = (uv_write_t *) malloc (sizeof (uv_write_t));
     buf = malloc (sizeof (uv_buf_t));
     buf->base = malloc (len);
@@ -47,37 +47,15 @@ send_stats_to_client (uv_stream_t * stream)
     }
 
 
-    for (listener = first_listener; listener->next; listener = listener->next) {
+    for (listener = first_listener; listener; listener = listener->next) {
         if (listener->type == LISTENER_STATS) {
             break;
         }
         len =
             snprintf (tmp, STATS_BUF_SIZE,
-                      "[%20s] [-->%10u] [%20s] [%15u] [%18u]\n", listener->s,
-                      listener->input_bytes, destination->s,
-                      listener->nr_allconn, listener->nr_conn);
-        req = (uv_write_t *) malloc (sizeof (uv_write_t));
-        buf = malloc (sizeof (uv_buf_t));
-        buf->base = malloc (len);
-        buf->len = len;
-        memcpy (buf->base, tmp, len);
-        req->data = buf;
-        if (uv_write (req, stream, buf, 1, on_write_free)) {
-            logmsg ("%s: uv_write failed", __FUNCTION__);
-            free (buf->base);
-            free (buf);
-            free (req);
-
-            shutdown = malloc (sizeof (uv_shutdown_t));
-            uv_shutdown (shutdown, stream, on_shutdown);
-            return;
-        }
-
-
-        len =
-            snprintf (tmp, STATS_BUF_SIZE,
-                      " %20s  [<--%10u]  %20s   %15s   %18s\n\n", "",
-                      listener->output_bytes, "", "", "");
+                      "  { \"socket\": \"%s\",\n    \"input_bytes\": %u,\n    \"output_bytes\": %u,\n    \"all_connections\": %u,\n    \"current_connections\": %u\n  }%s\n", listener->s,
+                      listener->input_bytes, listener->output_bytes,
+                      listener->nr_allconn, listener->nr_conn, listener->next?(listener->next->type==LISTENER_STATS?"":","):"");
         req = (uv_write_t *) malloc (sizeof (uv_write_t));
         buf = malloc (sizeof (uv_buf_t));
         buf->base = malloc (len);
@@ -97,8 +75,53 @@ send_stats_to_client (uv_stream_t * stream)
     }
 
     len =
+        snprintf (tmp, STATS_BUF_SIZE, "]\n\"upstreams\": [\n");
+    req = (uv_write_t *) malloc (sizeof (uv_write_t));
+    buf = malloc (sizeof (uv_buf_t));
+    buf->base = malloc (len);
+    buf->len = len;
+    memcpy (buf->base, tmp, len);
+    req->data = buf;
+    if (uv_write (req, stream, buf, 1, on_write_free)) {
+        logmsg ("%s: uv_write failed", __FUNCTION__);
+        free (buf->base);
+        free (buf);
+        free (req);
+
+        shutdown = malloc (sizeof (uv_shutdown_t));
+        uv_shutdown (shutdown, stream, on_shutdown);
+        return;
+    }
+
+    for (destination = first_destination; destination; destination= destination->next) {
+        len =
+            snprintf (tmp, STATS_BUF_SIZE,
+                      "  { \"socket\": \"%s\",\n    \"input_bytes\": %u,\n    \"output_bytes\": %u,\n    \"all_connections\": %u,\n    \"current_connections\": %u\n  }%s\n", destination->s,
+                      destination->input_bytes, destination->output_bytes,
+                      destination->nr_allconn, destination->nr_conn, destination->next?",":"");
+        req = (uv_write_t *) malloc (sizeof (uv_write_t));
+        buf = malloc (sizeof (uv_buf_t));
+        buf->base = malloc (len);
+        buf->len = len;
+        memcpy (buf->base, tmp, len);
+        req->data = buf;
+        if (uv_write (req, stream, buf, 1, on_write_free)) {
+            logmsg ("%s: uv_write failed", __FUNCTION__);
+            free (buf->base);
+            free (buf);
+            free (req);
+
+            shutdown = malloc (sizeof (uv_shutdown_t));
+            uv_shutdown (shutdown, stream, on_shutdown);
+            return;
+        }
+    }
+
+
+
+    len =
         snprintf (tmp, STATS_BUF_SIZE,
-                  "pool->used: %d\npool->size: %d\n", pool->used, pool->size);
+                  "],\n\"pool\": {\n  \"used\": %d,\n  \"size\": %d\n  }\n}\n", pool->used, pool->size);
     req = (uv_write_t *) malloc (sizeof (uv_write_t));
     buf = malloc (sizeof (uv_buf_t));
     buf->base = malloc (len);

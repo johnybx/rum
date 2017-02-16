@@ -186,8 +186,6 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
     /* check if size ends in user[1], so user has at least 1 char */
     if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1) {
-        conn_data->listener->nr_conn--;
-
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
         if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
             free (shutdown);

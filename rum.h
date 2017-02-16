@@ -124,6 +124,10 @@ struct destination
     };
     socklen_t addrlen;
 
+    /* statistics */
+    unsigned int nr_allconn, nr_conn;
+    unsigned int input_bytes, output_bytes;
+
     /* if we use -M we can have linked list of destinations */
     struct destination *next;
 };

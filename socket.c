@@ -96,6 +96,10 @@ prepareclient (char *arg, struct destination *destination)
 
     destination->s = strdup (arg);
     destination->next = NULL;
+    destination->nr_conn = 0;
+    destination->nr_allconn = 0;
+    destination->input_bytes = 0;
+    destination->output_bytes = 0;
 
     parse_arg (arg_copy, &type, &destination->sin, &destination->sun,
                &destination->addrlen, &port, &host_str, &port_str,
@@ -113,6 +117,9 @@ on_outgoing_connection (uv_connect_t * connect, int status)
     struct destination *destination;
 
     free (connect);
+
+    conn_data->destination->nr_allconn++;
+    conn_data->destination->nr_conn++;
 
     if (conn_data->connect_timer) {
         uv_timer_stop (conn_data->connect_timer);
@@ -170,7 +177,6 @@ on_outgoing_connection (uv_connect_t * connect, int status)
 
         return;
     }
-
     conn_data->stream = stream;
 
     uv_tcp_nodelay ((uv_tcp_t *) stream, 1);

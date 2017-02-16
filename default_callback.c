@@ -186,6 +186,8 @@ on_close (uv_handle_t * handle)
 
     if (conn_data->type == CONN_CLIENT) {
         conn_data->listener->nr_conn--;
+    } else if (conn_data->type == CONN_TARGET) {
+        conn_data->destination->nr_conn--;
     }
 
     free (handle);
