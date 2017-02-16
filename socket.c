@@ -16,16 +16,6 @@ int logfd;
 extern int connect_timeout;
 extern int read_timeout;
 
-extern int client_keepalive;
-extern int client_keepcnt;
-extern int client_keepidle;
-extern int client_keepintvl;
-
-extern int server_keepalive;
-extern int server_keepcnt;
-extern int server_keepidle;
-extern int server_keepintvl;
-
 /*
  * create_listen_socket return uv_stream
  * arg - tcp:blah:blah alebo sock:blah

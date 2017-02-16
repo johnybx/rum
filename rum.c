@@ -14,16 +14,6 @@ int destinations = 0;
 int connect_timeout = CONNECT_TIMEOUT;
 int read_timeout = READ_TIMEOUT;
 
-int client_keepalive = 0;
-int client_keepcnt = 0;
-int client_keepidle = 0;
-int client_keepintvl = 0;
-
-int server_keepalive = 0;
-int server_keepcnt = 0;
-int server_keepidle = 0;
-int server_keepintvl = 0;
-
 void
 signal_handler (uv_signal_t * handle, int signum)
 {
@@ -117,14 +107,6 @@ main (int ac, char *av[])
         {"failover", required_argument, 0, 'f'},
         {"read-timeout", required_argument, 0, 0},
         {"connect-timeout", required_argument, 0, 0},
-        {"client-keepalive", no_argument, &client_keepalive, 1},
-        {"client-keepcnt", required_argument, 0, 0},
-        {"client-keepidle", required_argument, 0, 0},
-        {"client-keepintvl", required_argument, 0, 0},
-        {"server-keepalive", no_argument, &server_keepalive, 1},
-        {"server-keepcnt", required_argument, 0, 0},
-        {"server-keepidle", required_argument, 0, 0},
-        {"server-keepintvl", required_argument, 0, 0},
         {0, 0, 0, 0}
     };
 
@@ -139,27 +121,6 @@ main (int ac, char *av[])
             if (strcmp (long_options[option_index].name, "connect-timeout") ==
                 0)
                 connect_timeout = atoi (optarg);
-            if (strcmp (long_options[option_index].name, "client-keepcnt") ==
-                0)
-                client_keepcnt = atoi (optarg);
-            if (strcmp (long_options[option_index].name, "client-keepidle") ==
-                0)
-                client_keepidle = atoi (optarg);
-            if (strcmp (long_options[option_index].name, "client-keepintvl") ==
-                0)
-                client_keepintvl = atoi (optarg);
-            if (strcmp (long_options[option_index].name, "server-keepcnt") ==
-                0)
-                server_keepcnt = atoi (optarg);
-            if (strcmp (long_options[option_index].name, "server-keepidle") ==
-                0)
-                server_keepidle = atoi (optarg);
-            if (strcmp (long_options[option_index].name, "server-keepintvl") ==
-                0)
-                server_keepintvl = atoi (optarg);
-
-
-
 
             break;
 
@@ -358,7 +319,7 @@ void
 usage ()
 {
     printf
-        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\t--client-keepalive - enable tcp keepalive for client connections\n\t--client-keepcnt X - override tcp_keepalive_probes\n\t--client-keepidle X - override tcp_keepalive_time\n\t--client-keepintvl X - override tcp_keepalive_intvl\n\t--server-keepalive - enable tcp keepalive for server connections\n\t--server-keepcnt X - override tcp_keepalive_probes\n\t--server-keepidle X - override tcp_keepalive_time\n\t--server-keepintvl X - override tcp_keepalive_intvl\n\n");
+        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\n");
     exit (-1);
 }
 
