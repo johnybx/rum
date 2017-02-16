@@ -25,6 +25,10 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
             usage ();
         }
 
+        if (!strcmp(*host_str, "localhost")) {
+            *host_str="127.0.0.1";
+        }
+
         *port = (uint16_t) atoi ((const char *) *port_str);
         memset (sin, 0, sizeof (struct sockaddr_in));
         sin->sin_addr.s_addr = inet_addr (*host_str);
