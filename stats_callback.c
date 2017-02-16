@@ -3,6 +3,7 @@
 /* when someone connect to statistics -m port, these functions are callbacks for bufferevent with client socket */
 /* there is no read_callback fn, because we dont need to read data from client */
 
+extern bufpool_t *pool;
 extern struct listener *first_listener;
 extern struct destination *first_destination;
 
@@ -94,6 +95,28 @@ send_stats_to_client (uv_stream_t * stream)
             return;
         }
     }
+
+    len =
+        snprintf (tmp, STATS_BUF_SIZE,
+                  "pool->used: %d\npool->size: %d\n", pool->used, pool->size);
+    req = (uv_write_t *) malloc (sizeof (uv_write_t));
+    buf = malloc (sizeof (uv_buf_t));
+    buf->base = malloc (len);
+    buf->len = len;
+    memcpy (buf->base, tmp, len);
+    req->data = buf;
+    if (uv_write (req, stream, buf, 1, on_write_free)) {
+        logmsg ("%s: uv_write failed", __FUNCTION__);
+        free (buf->base);
+        free (buf);
+        free (req);
+
+        shutdown = malloc (sizeof (uv_shutdown_t));
+        uv_shutdown (shutdown, stream, on_shutdown);
+        return;
+    }
+
+
     shutdown = malloc (sizeof (uv_shutdown_t));
     uv_shutdown (shutdown, stream, on_shutdown);
 }
