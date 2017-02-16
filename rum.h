@@ -34,6 +34,9 @@
 #define MYSQL57_INIT_PACKET "\x4a\x00\x00\x00\x0a\x35\x2e\x37\x2e\x31\x30\x00\x0d\x00\x00\x00\x01\x65\x70\x62\x09\x5d\x67\x5f\x00\xff\xf7\x08\x02\x00\xff\x81\x15\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x5e\x23\x25\x17\x25\x76\x7e\x36\x43\x19\x25\x66\x00\x6d\x79\x73\x71\x6c\x5f\x6e\x61\x74\x69\x76\x65\x5f\x70\x61\x73\x73\x77\x6f\x72\x64\x00"
 #define ERR_LOGIN_PACKET_PREFIX "\x00\x00\x00\x02\xff\x15\x04\x23\x32\x38\x30\x30\x30"
 
+/* cdb file is reopened every 2 seconds */
+#define CDB_RELOAD_TIME 2
+
 /* max length of data in socket output buffer */
 #define OUTPUT_BUFFER_LIMIT 16384
 
@@ -243,15 +246,13 @@ char *set_random_scramble_on_init_packet (char *packet, void *p1, void *p2);
 void init_mysql_cdb_file ();
 void get_data_from_cdb (char *user, int user_len, char **mysql_server,
                         char **mysql_password);
-void reopen_cdb (uv_fs_event_t * handle, const char *filename, int events,
-                 int status);
+void reopen_cdb (uv_timer_t * handle);
 
 /* postgresql_cdb.h */
 void init_postgresql_cdb_file ();
 void get_data_from_cdb_postgresql (char *user, int user_len,
                                    char **postgresql_server);
-void reopen_cdb_postgresql (uv_fs_event_t * handle, const char *filename,
-                            int events, int status);
+void reopen_cdb_postgresql (uv_timer_t* handle);
 
 
 /* stats.c */

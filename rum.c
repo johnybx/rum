@@ -13,6 +13,7 @@ int mode = MODE_NORMAL;
 int destinations = 0;
 int connect_timeout = CONNECT_TIMEOUT;
 int read_timeout = READ_TIMEOUT;
+int daemonize = 0;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -24,7 +25,7 @@ signal_handler (uv_signal_t * handle, int signum)
 int
 main (int ac, char *av[])
 {
-    int ret, ch, daemonize = 0;
+    int ret, ch;
     char *logfile = NULL;
     int i, ok;
     char *tmp, *ptr;
@@ -334,6 +335,9 @@ logmsg (const char *fmt, ...)
     va_end (args);
 
     syslog (LOG_DAEMON | LOG_WARNING, "[%s] %s", logstring, tmpmsg);
+    if (!daemonize) {
+        fprintf(stderr,"%s\n", tmpmsg);
+    }
 
 }
 

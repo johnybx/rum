@@ -1,3 +1,8 @@
+/* implementation of buffer pool to reuse big buffers allocated by malloc()
+ * inspired from http://stackoverflow.com/questions/28511541/libuv-allocated-memory-buffers-re-use-techniques
+ * modified with linked list
+ */
+
 #include "rum.h"
 
 extern bufpool_t *pool;
