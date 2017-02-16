@@ -143,6 +143,10 @@ on_connect_timeout (uv_timer_t * timer)
     uv_timer_stop (timer);
     uv_close ((uv_handle_t *) timer, on_close_timer);
 
+    if (conn_data->destination) {
+        logmsg ("timeout connecting to upstream %s", conn_data->destination->s);
+    }
+
     /* close socket */
     conn_data->connect_timer = NULL;
     /* we cannot call here uv_shutdown because it will fail (socket is not connected) */
@@ -158,6 +162,10 @@ on_read_timeout (uv_timer_t * timer)
     /* release timer */
     uv_timer_stop (timer);
     uv_close ((uv_handle_t *) timer, on_close_timer);
+
+    if (conn_data->destination) {
+        logmsg ("timeout reading first data from upstream %s", conn_data->destination->s);
+    }
 
     /* shutdown socket */
     conn_data->read_timer = NULL;

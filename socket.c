@@ -128,6 +128,7 @@ on_outgoing_connection (uv_connect_t * connect, int status)
         }
 
         if (mode == MODE_NORMAL) {
+        logmsg("connection to upstream %s failed (%s)", conn_data->destination->s, uv_strerror (status));
             /* connection failed, close client socket */
             if (conn_data->remote) {
                 conn_data->remote->remote = NULL;
@@ -140,14 +141,13 @@ on_outgoing_connection (uv_connect_t * connect, int status)
             if (conn_data->destination->next) {
                 /* select next server for connection */
                 logmsg
-                    ("%s: failover: connection to %s failed (%s), connecting to next server %s",
-                     __FUNCTION__, conn_data->destination->s,
+                    ("failover: connection to %s failed (%s), connecting to next server %s",
+                     conn_data->destination->s,
                      uv_strerror (status), conn_data->destination->next->s);
                 destination = conn_data->destination->next;
             } else {
                 logmsg
-                    ("%s: failover: no server available, closing client connection",
-                     __FUNCTION__);
+                    ("failover: no server available, closing client connection");
                 conn_data->remote->remote = NULL;
                 uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
                 uv_shutdown (shutdown, conn_data->remote->stream, on_shutdown);

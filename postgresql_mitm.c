@@ -55,7 +55,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
             free (shutdown);
         }
-        logmsg ("%s: error: client auth packet too short", __FUNCTION__);
+        logmsg ("%s: client auth packet too short", __FUNCTION__);
 
         return 1;
     }
@@ -68,7 +68,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         conn_data->ms->client_auth_packet + 2 * sizeof (int) + sizeof ("user");
     user_len = strnlen (userptr, nread - 2 * sizeof (int) - sizeof ("user"));
     if (user_len > sizeof (user) - 1) {
-        logmsg ("%s: error: user length too long", __FUNCTION__);
+        logmsg ("%s: user length too long", __FUNCTION__);
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
         if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
             free (shutdown);
@@ -103,7 +103,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         }
     } else {
         /*if user is not found in cdb  sent client error msg & close connection  */
-        logmsg ("%s: error: user %s not found in cdb", __FUNCTION__, user);
+        logmsg ("%s: user %s not found in cdb", __FUNCTION__, user);
 
         memset (buf, '\0', sizeof (buf));
         buf[0] = 'E';
@@ -146,14 +146,14 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
 
     /* if remote connection exists free it */
     if (conn_data->remote) {
-        logmsg ("%s: error: conn_data->remote is not NULL and should not be",
+        logmsg ("%s: conn_data->remote is not NULL and should not be",
                 __FUNCTION__);
         free (conn_data->remote);
     }
 
     if (!destination) {
         /* never happen ? */
-        logmsg ("%s: error: destination is NULL and should not be",
+        logmsg ("%s: destination is NULL and should not be",
                 __FUNCTION__);
         if (pg_server)
             free (pg_server);
