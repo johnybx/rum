@@ -19,7 +19,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
     struct conn_data *conn_data_remote;
 
     /* username must have at least 2 bytes with \0 at end */
-    if (nread < 2 * sizeof (int) + sizeof ("user") + 2) {
+    if (nread < 2 * sizeof (int) + sizeof ("user")) {
         /* check if it is SSLRequest */
         if (nread == 8) {
             char bufx[8];
@@ -66,7 +66,6 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
 
     userptr =
         conn_data->ms->client_auth_packet + 2 * sizeof (int) + sizeof ("user");
-    // TODO
     user_len = strnlen (userptr, nread - 2 * sizeof (int) - sizeof ("user"));
     if (user_len > sizeof (user) - 1) {
         logmsg ("%s: error: user length too long", __FUNCTION__);
