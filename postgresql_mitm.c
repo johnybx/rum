@@ -14,7 +14,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
     char buf3[512];
     char buf4[512];
     int user_len, buflen, buflen_htonl, buf1len, buf2len, buf3len, buf4len;
-    struct destination *destination = NULL, *dst;
+    struct destination *destination = NULL;
     char *pg_server = NULL, *userptr;
     struct conn_data *conn_data_remote;
 
@@ -84,25 +84,9 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
     get_data_from_cdb_postgresql (user, user_len, &pg_server);
 
     if (pg_server != NULL) {
-        if (first_destination) {
-            for (dst = first_destination; dst->next; dst = dst->next) {
-                if (!strcmp (dst->s, pg_server)) {
-                    destination = dst;
-                    break;
-                }
-            }
-
-            if (!destination) {
-                dst->next = destination = malloc (sizeof (struct destination));
-                prepareclient (pg_server, destination);
-            }
-        } else {
-            first_destination = destination =
-                malloc (sizeof (struct destination));
-            prepareclient (pg_server, destination);
-        }
+        destination = add_destination(pg_server);
     } else {
-        /*if user is not found in cdb  sent client error msg & close connection  */
+        /* if user is not found in cdb, sent client error msg & close connection  */
         logmsg ("%s: user %s not found in cdb", __FUNCTION__, user);
 
         memset (buf, '\0', sizeof (buf));

@@ -85,7 +85,7 @@ create_listen_socket (char *arg)
 /* fill destination->sin or destination->sun and destination->socklen
  */
 void
-prepareclient (char *arg, struct destination *destination)
+prepare_upstream (char *arg, struct destination *destination)
 {
     char *arg_copy;
     uint16_t port;

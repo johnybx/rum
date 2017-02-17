@@ -189,7 +189,7 @@ struct mysql_mitm
 void usage ();
 void logmsg (const char *fmt, ...);
 int get_num_fds ();
-void add_destination (char *ptr);
+struct destination *add_destination (char *ptr);
 void randomize_destinations (void);
 void shuffle (struct destination **array, size_t n);
 
@@ -204,7 +204,7 @@ struct conn_data *create_server_connection (struct conn_data *conn_data_client,
 void alloc_buffer (uv_handle_t * handle, size_t size, uv_buf_t * buf);
 uv_stream_t *create_listen_socket (char *wwtf);
 void on_incoming_connection (uv_stream_t * server, int status);
-void prepareclient (char *wwtf, struct destination *destination);
+void prepare_upstream (char *wwtf, struct destination *destination);
 void failover (struct conn_data *bev_target);
 
 /* parse_arg.c */

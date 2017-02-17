@@ -162,7 +162,7 @@ main (int ac, char *av[])
         case 'd':
             first_destination = destination =
                 malloc (sizeof (struct destination));
-            prepareclient (optarg, destination);
+            prepare_upstream (optarg, destination);
             break;
         case 'l':
             logfile = strdup (optarg);
@@ -360,29 +360,35 @@ get_num_fds ()
     return fd_count;
 }
 
-void
+/* add upstream server to linked list of struct destination */
+struct destination *
 add_destination (char *ptr)
 {
-    struct destination *destination = NULL, *dst;
+    struct destination *destination = NULL, *dst, *last;
 
     if (first_destination) {
-        for (dst = first_destination; dst->next; dst = dst->next) {
+        for (dst = first_destination; dst; dst = dst->next) {
             if (!strcmp (dst->s, ptr)) {
                 destination = dst;
                 break;
             }
+
+            if (!dst->next) {
+                last = dst;
+            }
         }
 
+        /* append new destination at end of linked list */
         if (!destination) {
-            dst->next = destination = malloc (sizeof (struct destination));
-            prepareclient (ptr, destination);
+            last->next = destination = malloc (sizeof (struct destination));
+            prepare_upstream (ptr, destination);
         }
     } else {
         first_destination = destination = malloc (sizeof (struct destination));
-        prepareclient (ptr, destination);
+        prepare_upstream (ptr, destination);
     }
 
-    return;
+    return destination;
 }
 
 void

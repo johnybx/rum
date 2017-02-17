@@ -181,7 +181,7 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
     char buf[512];
     int user_len, buflen;
     struct conn_data *conn_data_remote;
-    struct destination *destination = NULL, *dst;
+    struct destination *destination = NULL;
     char *mysql_server = NULL, *c, *i, *userptr;
 
     /* check if size ends in user[1], so user has at least 1 char */
@@ -270,27 +270,9 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
     }
 
     if (mysql_server != NULL) {
-        if (first_destination) {
-            for (dst = first_destination; dst->next; dst = dst->next) {
-                if (!strcmp (dst->s, mysql_server)) {
-                    destination = dst;
-                    break;
-                }
-            }
-
-            if (!destination) {
-                dst->next = destination = malloc (sizeof (struct destination));
-                prepareclient (mysql_server, destination);
-            }
-        } else {
-            first_destination = destination =
-                malloc (sizeof (struct destination));
-            prepareclient (mysql_server, destination);
-        }
+        destination = add_destination(mysql_server);
     } else {
-        /* if user is not found in cdb we use mysql server set with -d argument
-         * but connection will not be successful, we need user encrypted password which should be in cdb file
-         */
+        /* if user is not found in cdb, sent client error msg & close connection  */
         destination = first_destination;
 
         logmsg ("%s: user %s not found in cdb", __FUNCTION__, user);
