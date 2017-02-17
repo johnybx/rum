@@ -47,10 +47,12 @@ create_listen_socket (char *arg)
         s = (struct sockaddr *) &sin;
         tcp_t = malloc (sizeof (uv_tcp_t));
         uv_tcp_init_ex (uv_default_loop (), tcp_t, AF_INET);
+#if defined(SO_REUSEPORT)
         /* set SO_REUSEPORT so we can bind to tcp port when it is still used by running rum */
         uv_fileno ((uv_handle_t *) tcp_t, &fd);
         int optval = 1;
         setsockopt (fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof (optval));
+#endif
     } else if (type == SOCKET_UNIX) {
         s = (struct sockaddr *) &sun;
         pipe_t = malloc (sizeof (uv_pipe_t));
