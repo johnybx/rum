@@ -63,7 +63,9 @@ create_listen_socket (char *arg)
     if (type == SOCKET_TCP) {
         r = uv_tcp_bind (tcp_t, (const struct sockaddr *) s, 0);
     } else if (type == SOCKET_UNIX) {
+        mode_t oldmask = umask(0);
         r = uv_pipe_bind (pipe_t, sun.sun_path);
+        umask(oldmask);
     }
 
     if (r) {
