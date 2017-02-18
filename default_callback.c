@@ -63,7 +63,7 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
             /* there is tcp buffer so there is definitely some data, no need to buffer more data in rum */
             if (remote_stream->write_queue_size > 0) {
                 /* disable reading on input socket */
-                conn_data->remote->read_stopped = 1;
+                conn_data->remote->remote_read_stopped = 1;
                 uv_read_stop (stream);
             }
 
@@ -113,10 +113,10 @@ on_shutdown (uv_shutdown_t * shutdown, int status)
         conn_data->connect_timer = NULL;
     }
 
-    if (conn_data->ms) {
-        free_ms (conn_data->ms);
-        if (conn_data->remote && conn_data->remote->ms) {
-            conn_data->remote->ms = NULL;
+    if (conn_data->mitm) {
+        free_mitm (conn_data->mitm);
+        if (conn_data->remote && conn_data->remote->mitm) {
+            conn_data->remote->mitm = NULL;
         }
     }
 
@@ -210,10 +210,10 @@ on_write (uv_write_t * req, int status)
     uv_buf_t *buf = (uv_buf_t *) req->data;
 
     /* if reading from remote socket was stopped because o non-zero write_queue, reenable reading  */
-    if (conn_data->read_stopped && conn_data->remote
+    if (conn_data->remote_read_stopped && conn_data->remote
         && req->handle->write_queue_size == 0) {
         uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
-        conn_data->read_stopped = 0;
+        conn_data->remote_read_stopped = 0;
     }
 
     bufpool_release (buf->base);

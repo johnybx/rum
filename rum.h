@@ -37,9 +37,6 @@
 /* cdb file is reopened every 2 seconds */
 #define CDB_RELOAD_TIME 2
 
-/* max length of data in socket output buffer */
-#define OUTPUT_BUFFER_LIMIT 16384
-
 #define CONNECT_TIMEOUT 6
 #define READ_TIMEOUT 6          /* only for first data from server, if mysql is stuck and dont send any data within READ_TIMEOUT we drop connection */
 
@@ -55,6 +52,7 @@
 #define MODE_FAILOVER_RR 2      /* -r tcp:...,tcp:... */
 #define MODE_FAILOVER_R 3       /* -R tcp:...,tcp:... */
 
+/* we keep maximum of 100 pre-allocated buffers of 64000b size */
 #define BUFPOOL_CAPACITY 100
 #define BUF_SIZE 64000
 
@@ -79,23 +77,6 @@ struct bufbase_s
     void *next;
     int len;
 };
-
-
-
-/* bufpool.c */
-void *bufpool_dummy ();
-void *bufpool_grow (bufpool_t * pool);
-void bufpool_enqueue (bufpool_t * pool, void *ptr);
-void *bufpool_dequeue (bufpool_t * pool);
-void bufpool_init (bufpool_t * pool, int size);
-void bufpool_done (bufpool_t * pool);
-void alloc_cb (uv_handle_t * handle, size_t size, uv_buf_t * buf);
-void *bufpool_acquire (bufpool_t * pool, int *len);
-void *bufpool_alloc (bufpool_t * pool, int len);
-void bufpool_done (bufpool_t * pool);
-void bufpool_release (void *ptr);
-void bufpool_print_stats (uv_timer_t * handle);
-
 
 struct listener
 {
@@ -146,11 +127,10 @@ struct conn_data
     char type;
 #define CONN_CLIENT 1
 #define CONN_TARGET 2
-#define CONN_CACHE 3
 
     /* if -M or -P is used, this structure hold some data used in mysql_callback.c/postgresql_callback.c */
     /* if not it is NULL */
-    struct mysql_mitm *ms;
+    struct mitm *mitm;
 
     /* used as workaround for bug in bufferevent_socket_connect() */
     char connecting;
@@ -160,10 +140,11 @@ struct conn_data
     uv_timer_t *read_timer;
     struct destination *destination;
     short uv_closed;
-    short read_stopped;
+    short remote_read_stopped;
 };
 
-struct mysql_mitm
+/* if we use cdb database we need to store some information from client or server and process it */
+struct mitm
 {
     char handshake;             /* current status of mysql handshake */
 
@@ -235,8 +216,8 @@ pg_handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * buf,
                             size_t nread);
 
 /* mysql_mitm.c */
-struct mysql_mitm *init_ms ();
-void free_ms (struct mysql_mitm *ms);
+struct mitm *init_mitm ();
+void free_mitm (struct mitm *mitm);
 char *get_scramble_from_init_packet (char *packet, size_t len);
 int handle_init_packet_from_server (struct conn_data *conn_data,
                                     const uv_buf_t * buf, size_t nread);
@@ -267,3 +248,19 @@ void on_connect_timeout (uv_timer_t * timer);
 void on_write (uv_write_t * req, int status);
 void on_write_free (uv_write_t * req, int status);
 void on_write_nofree (uv_write_t * req, int status);
+
+/* bufpool.c */
+void *bufpool_dummy ();
+void *bufpool_grow (bufpool_t * pool);
+void bufpool_enqueue (bufpool_t * pool, void *ptr);
+void *bufpool_dequeue (bufpool_t * pool);
+void bufpool_init (bufpool_t * pool, int size);
+void bufpool_done (bufpool_t * pool);
+void alloc_cb (uv_handle_t * handle, size_t size, uv_buf_t * buf);
+void *bufpool_acquire (bufpool_t * pool, int *len);
+void *bufpool_alloc (bufpool_t * pool, int len);
+void bufpool_done (bufpool_t * pool);
+void bufpool_release (void *ptr);
+void bufpool_print_stats (uv_timer_t * handle);
+
+

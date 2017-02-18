@@ -197,13 +197,13 @@ on_outgoing_connection (uv_connect_t * connect, int status)
         if (r) {
         }
         /* send server client auth packet */
-        if (conn_data->ms && conn_data->ms->client_auth_packet) {
+        if (conn_data->mitm && conn_data->mitm->client_auth_packet) {
             uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
             uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-            newbuf->base = conn_data->ms->client_auth_packet;
-            newbuf->len = conn_data->ms->client_auth_packet_len;
+            newbuf->base = conn_data->mitm->client_auth_packet;
+            newbuf->len = conn_data->mitm->client_auth_packet_len;
             req->data = newbuf;
-            conn_data->ms->client_auth_packet = NULL;
+            conn_data->mitm->client_auth_packet = NULL;
             if (uv_write (req, stream, newbuf, 1, on_write_free)) {
                 logmsg ("%s: uv_write(postgresql client_auth_packet) failed",
                         __FUNCTION__);
@@ -290,9 +290,9 @@ on_incoming_connection (uv_stream_t * server, int status)
     conn_data_client->connect_timer = NULL;
     conn_data_client->read_timer = NULL;
     conn_data_client->destination = NULL;
-    conn_data_client->ms = NULL;
+    conn_data_client->mitm = NULL;
     conn_data_client->uv_closed = 0;
-    conn_data_client->read_stopped = 0;
+    conn_data_client->remote_read_stopped = 0;
 
     client->data = conn_data_client;
     conn_data_client->remote = NULL;
@@ -310,18 +310,18 @@ on_incoming_connection (uv_stream_t * server, int status)
             }
         } else if (mysql_cdb_file) {
             /* if mysql_cdb is enabled, use different callback functions */
-            conn_data_client->ms = init_ms ();
+            conn_data_client->mitm = init_mitm ();
 
             conn_data_client->remote = NULL;
-            conn_data_client->ms->not_need_remote = 1;
-            conn_data_client->ms->handshake = 1;
+            conn_data_client->mitm->not_need_remote = 1;
+            conn_data_client->mitm->handshake = 1;
 
             /* we use conn_data_client and ms pointers as random data for generating random string filled in init packet send to client */
             /* TODO: use better random input */
-            conn_data_client->ms->scramble1 =
+            conn_data_client->mitm->scramble1 =
                 set_random_scramble_on_init_packet (cache_mysql_init_packet,
                                                     conn_data_client->stream,
-                                                    conn_data_client->ms);
+                                                    conn_data_client->mitm);
 
             r = uv_read_start ((uv_stream_t *) client, alloc_cb,
                                mysql_on_read);
@@ -358,11 +358,11 @@ on_incoming_connection (uv_stream_t * server, int status)
             return;
         } else if (postgresql_cdb_file) {
             /* if postgresql_cdb is enabled, use different callback functions */
-            conn_data_client->ms = init_ms ();
+            conn_data_client->mitm = init_mitm ();
 
             conn_data_client->remote = NULL;
-            conn_data_client->ms->not_need_remote = 1;
-            conn_data_client->ms->handshake = 1;
+            conn_data_client->mitm->not_need_remote = 1;
+            conn_data_client->mitm->handshake = 1;
 
             int r =
                 uv_read_start ((uv_stream_t *) client, alloc_cb,
@@ -415,7 +415,7 @@ create_server_connection (struct conn_data *conn_data_client,
     conn_data_target->connecting = 0;
     conn_data_target->connected = 0;
     conn_data_target->uv_closed = 0;
-    conn_data_target->read_stopped = 0;
+    conn_data_target->remote_read_stopped = 0;
     conn_data_target->destination = destination;
     conn_data_target->failover_first_dst = destination;
 
@@ -428,7 +428,7 @@ create_server_connection (struct conn_data *conn_data_client,
     conn_data_target->read_timer = NULL;
 
     /* mysql_stuff/postgresql_stuff structure is same for client and target bufferevent */
-    conn_data_target->ms = conn_data_client->ms;
+    conn_data_target->mitm = conn_data_client->mitm;
 
     connect->data = conn_data_target;
     target->data = conn_data_target;

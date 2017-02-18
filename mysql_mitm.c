@@ -9,61 +9,61 @@ extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern struct destination *first_destination;
 
-/* initialize struct mysql_mitm */
-struct mysql_mitm *
-init_ms ()
+/* initialize struct mitm */
+struct mitm *
+init_mitm ()
 {
 
-    struct mysql_mitm *ms;
+    struct mitm *mitm;
 
-    ms = malloc (sizeof (struct mysql_mitm));
-    ms->not_need_remote = 0;
-    ms->handshake = 0;
-    ms->client_auth_packet = NULL;
-    ms->password = NULL;
-    ms->scramble1 = NULL;
-    ms->scramble2 = NULL;
-    ms->hash_stage1 = NULL;
-    ms->hash_stage2 = NULL;
+    mitm = malloc (sizeof (struct mitm));
+    mitm->not_need_remote = 0;
+    mitm->handshake = 0;
+    mitm->client_auth_packet = NULL;
+    mitm->password = NULL;
+    mitm->scramble1 = NULL;
+    mitm->scramble2 = NULL;
+    mitm->hash_stage1 = NULL;
+    mitm->hash_stage2 = NULL;
 
-    return ms;
+    return mitm;
 }
 
-/* free struct mysql_mitm and all variables inside where we use malloc() */
+/* free struct mitm and all variables inside where we use malloc() */
 void
-free_ms (struct mysql_mitm *ms)
+free_mitm (struct mitm *mitm)
 {
-    if (ms == NULL) {
+    if (mitm == NULL) {
         return;
     }
 
-    if (ms->client_auth_packet) {
-        free (ms->client_auth_packet);
-        ms->client_auth_packet = NULL;
+    if (mitm->client_auth_packet) {
+        free (mitm->client_auth_packet);
+        mitm->client_auth_packet = NULL;
     }
 
-    if (ms->password) {
-        free (ms->password);
-        ms->password = NULL;
+    if (mitm->password) {
+        free (mitm->password);
+        mitm->password = NULL;
     }
-    if (ms->scramble1) {
-        free (ms->scramble1);
-        ms->scramble1 = NULL;
+    if (mitm->scramble1) {
+        free (mitm->scramble1);
+        mitm->scramble1 = NULL;
     }
-    if (ms->scramble2) {
-        free (ms->scramble2);
-        ms->scramble2 = NULL;
+    if (mitm->scramble2) {
+        free (mitm->scramble2);
+        mitm->scramble2 = NULL;
     }
-    if (ms->hash_stage1) {
-        free (ms->hash_stage1);
-        ms->hash_stage1 = NULL;
+    if (mitm->hash_stage1) {
+        free (mitm->hash_stage1);
+        mitm->hash_stage1 = NULL;
     }
-    if (ms->hash_stage2) {
-        free (ms->hash_stage2);
-        ms->hash_stage2 = NULL;
+    if (mitm->hash_stage2) {
+        free (mitm->hash_stage2);
+        mitm->hash_stage2 = NULL;
     }
 
-    free (ms);
+    free (mitm);
 }
 
 
@@ -151,7 +151,7 @@ handle_init_packet_from_server (struct conn_data *conn_data,
                                 const uv_buf_t * uv_buf, size_t nread)
 {
     char mysql_server_init_packet[4096];
-    conn_data->ms->handshake = 1;
+    conn_data->mitm->handshake = 1;
 
     /* paket too small or too big */
     if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_INIT_PACKET_MIN_SIZE ||
@@ -165,8 +165,8 @@ handle_init_packet_from_server (struct conn_data *conn_data,
         return 1;
     }
 
-    /* get scramble into shared struct mysql_mitm between our socket and client socket */
-    conn_data->ms->scramble1 =
+    /* get scramble into shared struct mitm between our socket and client socket */
+    conn_data->mitm->scramble1 =
         get_scramble_from_init_packet (uv_buf->base, nread);
 
     return 0;
@@ -196,12 +196,12 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         return 1;
     }
 
-    conn_data->ms->client_auth_packet_len = nread;
-    conn_data->ms->client_auth_packet = malloc (nread);
-    memcpy (conn_data->ms->client_auth_packet, uv_buf->base, nread);
+    conn_data->mitm->client_auth_packet_len = nread;
+    conn_data->mitm->client_auth_packet = malloc (nread);
+    memcpy (conn_data->mitm->client_auth_packet, uv_buf->base, nread);
 
     userptr =
-        conn_data->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
+        conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS;
     /* limit strnlen to packet length without HEADER */
     user_len =
@@ -222,12 +222,12 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
     }
     strncpy (user,
-             conn_data->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
+             conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
              MYSQL_AUTH_PACKET_USER_POS, user_len);
     user[user_len] = '\0';
 
     get_data_from_cdb (user, user_len, &mysql_server,
-                       &conn_data->ms->password);
+                       &conn_data->mitm->password);
 
     /* another size check if we know user_len, there must be at least 21 bytes after username
      * 1 byte length
@@ -251,22 +251,22 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         return 1;
     }
 
-    i = conn_data->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
+    i = conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS + user_len + 1;
-    c = conn_data->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
+    c = conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS + user_len + 1 + 1;
 
     /* scramble length in client packet != 0 (client dont sent empty password) */
-    if (*i && conn_data->ms->password) {
-        conn_data->ms->hash_stage2 = malloc (SHA1_HASH_SIZE);
-        get_salt_from_password (conn_data->ms->hash_stage2,
-                                conn_data->ms->password);
+    if (*i && conn_data->mitm->password) {
+        conn_data->mitm->hash_stage2 = malloc (SHA1_HASH_SIZE);
+        get_salt_from_password (conn_data->mitm->hash_stage2,
+                                conn_data->mitm->password);
 
-        conn_data->ms->hash_stage1 = malloc (SHA1_HASH_SIZE);
+        conn_data->mitm->hash_stage1 = malloc (SHA1_HASH_SIZE);
 
-        get_hash_stage1 (c, conn_data->ms->scramble1,
-                         conn_data->ms->hash_stage2,
-                         conn_data->ms->hash_stage1);
+        get_hash_stage1 (c, conn_data->mitm->scramble1,
+                         conn_data->mitm->hash_stage2,
+                         conn_data->mitm->hash_stage1);
     }
 
     if (mysql_server != NULL) {
@@ -336,10 +336,10 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
     conn_data_remote =
         create_server_connection (conn_data, destination, conn_data->listener);
-    conn_data->ms->not_need_remote = 0;
-    conn_data_remote->ms = conn_data->ms;
+    conn_data->mitm->not_need_remote = 0;
+    conn_data_remote->mitm = conn_data->mitm;
     conn_data_remote->listener = conn_data->listener;
-    conn_data->ms->handshake = 2;
+    conn_data->mitm->handshake = 2;
 
     if (mysql_server)
         free (mysql_server);
@@ -367,33 +367,33 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
     }
 
 
-    if (conn_data->ms->hash_stage1) {
-        conn_data->ms->scramble2 =
+    if (conn_data->mitm->hash_stage1) {
+        conn_data->mitm->scramble2 =
             get_scramble_from_init_packet (uv_buf->base, nread);
     }
 
-    if (conn_data->ms->hash_stage1) {
+    if (conn_data->mitm->hash_stage1) {
         user =
-            conn_data->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
+            conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
             MYSQL_AUTH_PACKET_USER_POS;
         user_len = strlen (user);
 
         scramble_ptr =
-            conn_data->ms->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
+            conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
             MYSQL_AUTH_PACKET_USER_POS + user_len + 1 + 1;
 
-        scramble_with_hash_stage1 (scramble_ptr, conn_data->ms->scramble2,
-                                   conn_data->ms->hash_stage1);
+        scramble_with_hash_stage1 (scramble_ptr, conn_data->mitm->scramble2,
+                                   conn_data->mitm->hash_stage1);
     }
 
     uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
     uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-    int newlen = conn_data->ms->client_auth_packet_len;
+    int newlen = conn_data->mitm->client_auth_packet_len;
     newbuf->base = bufpool_acquire (pool, &newlen);
 
-    memcpy (newbuf->base, conn_data->ms->client_auth_packet,
-            conn_data->ms->client_auth_packet_len);
-    newbuf->len = conn_data->ms->client_auth_packet_len;
+    memcpy (newbuf->base, conn_data->mitm->client_auth_packet,
+            conn_data->mitm->client_auth_packet_len);
+    newbuf->len = conn_data->mitm->client_auth_packet_len;
     req->data = newbuf;
     if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
@@ -403,9 +403,9 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
         bufpool_release (newbuf->base);
     }
 
-    free_ms (conn_data->ms);
-    conn_data->ms = NULL;
-    conn_data->remote->ms = NULL;
+    free_mitm (conn_data->mitm);
+    conn_data->mitm = NULL;
+    conn_data->remote->mitm = NULL;
 
     if (uv_read_start (conn_data->stream, alloc_cb, on_read)) {
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));

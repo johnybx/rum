@@ -16,7 +16,7 @@ postgresql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
     }
 
 
-    if (conn_data->remote || (conn_data->ms && conn_data->ms->not_need_remote)) {
+    if (conn_data->remote || (conn_data->mitm && conn_data->mitm->not_need_remote)) {
         if (nread > 0) {
             if (conn_data->type == CONN_CLIENT) {
                 conn_data->listener->input_bytes += nread;

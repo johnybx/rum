@@ -60,12 +60,12 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         return 1;
     }
 
-    conn_data->ms->client_auth_packet_len = nread;
-    conn_data->ms->client_auth_packet = malloc (nread);
-    memcpy (conn_data->ms->client_auth_packet, uv_buf->base, nread);
+    conn_data->mitm->client_auth_packet_len = nread;
+    conn_data->mitm->client_auth_packet = malloc (nread);
+    memcpy (conn_data->mitm->client_auth_packet, uv_buf->base, nread);
 
     userptr =
-        conn_data->ms->client_auth_packet + 2 * sizeof (int) + sizeof ("user");
+        conn_data->mitm->client_auth_packet + 2 * sizeof (int) + sizeof ("user");
     user_len = strnlen (userptr, nread - 2 * sizeof (int) - sizeof ("user"));
     if (user_len > sizeof (user) - 1) {
         logmsg ("%s: user length too long", __FUNCTION__);
@@ -77,7 +77,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         return 1;
     }
     strncpy (user,
-             conn_data->ms->client_auth_packet + 2 * sizeof (int) +
+             conn_data->mitm->client_auth_packet + 2 * sizeof (int) +
              sizeof ("user"), user_len);
     user[user_len] = '\0';
 
@@ -152,10 +152,10 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
 
     conn_data_remote =
         create_server_connection (conn_data, destination, conn_data->listener);
-    conn_data->ms->not_need_remote = 0;
-    conn_data_remote->ms = conn_data->ms;
+    conn_data->mitm->not_need_remote = 0;
+    conn_data_remote->mitm = conn_data->mitm;
     conn_data_remote->listener = conn_data->listener;
-    conn_data->ms->handshake = 2;
+    conn_data->mitm->handshake = 2;
 
     if (pg_server)
         free (pg_server);
