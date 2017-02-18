@@ -121,7 +121,7 @@ send_stats_to_client (uv_stream_t * stream)
 
     len =
         snprintf (tmp, STATS_BUF_SIZE,
-                  "],\n\"pool\": {\n  \"used\": %d,\n  \"size\": %d\n  }\n}\n", pool->used, pool->size);
+                  "],\n\"pool\": {\n  \"used\": %d,\n  \"size\": %d\n  }\n}\n", pool->used, pool->available);
     req = (uv_write_t *) malloc (sizeof (uv_write_t));
     buf = malloc (sizeof (uv_buf_t));
     buf->base = malloc (len);
