@@ -62,7 +62,7 @@ struct bufpool_s
 {
     void *first;
     int used;
-    int size;
+    int available;
     int alloc_size;
 };
 

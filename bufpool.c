@@ -10,12 +10,10 @@ extern bufpool_t *pool;
 void
 bufpool_print_stats (uv_timer_t * handle)
 {
-    int i = 0;
-
     uv_timer_stop (handle);
     uv_timer_start (handle, bufpool_print_stats, 10000, 10000);
-    fprintf (stderr, "pool->used: %d\npool->size: %d realsize: %d\n",
-             pool->used, pool->size, i);
+    fprintf (stderr, "pool->used: %d\npool->available: %d\n",
+             pool->used, pool->available);
 
 }
 
@@ -29,7 +27,7 @@ bufpool_enqueue (bufpool_t * pool, void *ptr)
     }
     pool->first = ptr;
     pool->used--;
-    pool->size++;
+    pool->available++;
 }
 
 void *
@@ -40,11 +38,11 @@ bufpool_dequeue (bufpool_t * pool)
         ptr = pool->first;
         pool->first = bufbase (ptr)->next;
         pool->used++;
-        pool->size--;
+        pool->available--;
         bufbase (ptr)->next = NULL;
         return ptr;
     } else {
-        if (pool->size + pool->used <= BUFPOOL_CAPACITY) {
+        if (pool->available + pool->used <= BUFPOOL_CAPACITY) {
             return bufpool_alloc (pool, pool->alloc_size);
         } else {
             return NULL;
@@ -56,7 +54,7 @@ void
 bufpool_init (bufpool_t * pool, int size)
 {
     pool->alloc_size = size;
-    pool->size = 0;
+    pool->available = 0;
     pool->used = 0;
     pool->first = NULL;
 }
