@@ -20,13 +20,6 @@ send_stats_to_client (uv_stream_t * stream)
     uv_buf_t *buf;
     uv_shutdown_t *shutdown;
 
-    if (!destination) {
-        /* if destination is not initialized close connection */
-        shutdown = malloc (sizeof (uv_shutdown_t));
-        uv_shutdown (shutdown, stream, on_shutdown);
-        return;
-    }
-
     len =
         snprintf (tmp, STATS_BUF_SIZE, "{\n\"listeners\": [\n");
     req = (uv_write_t *) malloc (sizeof (uv_write_t));
@@ -121,7 +114,7 @@ send_stats_to_client (uv_stream_t * stream)
 
     len =
         snprintf (tmp, STATS_BUF_SIZE,
-                  "],\n\"pool\": {\n  \"used\": %d,\n  \"size\": %d\n  }\n}\n", pool->used, pool->available);
+                  "],\n\"pool\": {\n  \"used\": %d,\n  \"available\": %d\n  }\n}\n", pool->used, pool->available);
     req = (uv_write_t *) malloc (sizeof (uv_write_t));
     buf = malloc (sizeof (uv_buf_t));
     buf->base = malloc (len);
