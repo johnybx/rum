@@ -249,15 +249,16 @@ on_incoming_connection (uv_stream_t * server, int status)
 {
     struct listener *listener = (struct listener *) server->data;
     struct conn_data *conn_data_client, *conn_data_target;
-
     struct destination *destination = NULL;
     int r;
-
     uv_stream_t *client;
+
     if (listener->type == SOCKET_TCP) {
         client = malloc (sizeof (uv_tcp_t));
+        uv_tcp_init (uv_default_loop (), (uv_tcp_t *) client);
     } else {
         client = malloc (sizeof (uv_pipe_t));
+        uv_pipe_init (uv_default_loop (), (uv_tcp_t *) client, 0);
     }
 
     if (mode == MODE_NORMAL) {
@@ -267,10 +268,7 @@ on_incoming_connection (uv_stream_t * server, int status)
         destination = first_destination;
     }
 
-    client = malloc (sizeof (uv_tcp_t));
-    uv_tcp_init (uv_default_loop (), (uv_tcp_t *) client);
-
-    if (uv_accept (server, (uv_stream_t *) client)) {
+    if (uv_accept (server, client)) {
         logmsg ("%s: uv_accept failed", __FUNCTION__);
         free (client);
         return;
