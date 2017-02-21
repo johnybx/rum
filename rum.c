@@ -284,6 +284,20 @@ main (int ac, char *av[])
         usage ();
     }
 
+    if (daemonize) {
+        /* check for environment PIDFILE and write pid there */
+        char *pidfile = getenv("PIDFILE");
+        if (pidfile) {
+            FILE *fp = fopen(pidfile, "w");
+            if (fp) {
+                fprintf (fp, "%d", getppid());
+                fclose (fp);
+            } else {
+                logmsg("cannot open pidfile %s (%s)", pidfile, strerror (errno));
+            }
+        }
+    }
+
     /* main libevent loop */
     uv_run (uv_default_loop (), UV_RUN_DEFAULT);
 

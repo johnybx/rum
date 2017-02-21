@@ -24,6 +24,10 @@ DAEMON_ARGS=""             # Arguments to run the daemon with
 PIDFILE=/var/run/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
 
+# default socket for postgres sit here
+mkdir -p /var/run/postgresql
+chmod 755 /var/run/postgresql
+
 # Exit if the package is not installed
 [ -x $DAEMON ] || exit 0
 
@@ -49,20 +53,16 @@ do_start()
         grep -v ^# /etc/default/$NAME | \
 	while read instance
 	do
-		PIDFILE=/var/run/${instance%%:*}.pid
+		export PIDFILE=/var/run/${instance%%:*}.pid
 		DAEMON_ARGS=${instance#*:}
-			start-stop-daemon --start -m --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
+			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 				||  log_warning_msg "daemon was already running"
-			start-stop-daemon --start -m --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- \
+			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- \
 				$DAEMON_ARGS \
 				|| log_failure_msg "daemon could not be started"
 		# Add code here, if necessary, that waits for the process to be ready
 		# to handle requests from services started subsequently which depend
 		# on this one.  As a last resort, sleep for some time.
-
-		# rum forks itself to background so pid is always about one off
-		PID=`cat $PIDFILE`
-		echo $((PID+1)) > $PIDFILE
 	done
 }
 
@@ -92,7 +92,6 @@ do_stop()
 		# Many daemons don't delete their pidfiles when they exit.
 		[ -f $PIDFILE ] && rm -f $PIDFILE
 	done
-	rm -f /var/run/rum*.pid
 	unset IFS
 	return 0
 }
@@ -109,7 +108,7 @@ do_reload() {
 	grep -v ^# /etc/default/$NAME | \
         while read instance
 	do
-		PIDFILE=/var/run/${instance%%:*}.pid
+		export PIDFILE=/var/run/${instance%%:*}.pid
 		PROCESS=$(cat $PIDFILE 2> /dev/null)
 		PROCESS_NAME=$(ps -p $PROCESS -o comm= 2> /dev/null)	
 
@@ -132,9 +131,7 @@ do_reload() {
 			unset PID
 			fi
 			# start not running process
-			start-stop-daemon --start -m --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
-			PID=`cat $PIDFILE`
-		        echo $((PID+1)) > $PIDFILE
+			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
 			continue
 		elif [ "$DAEMON $DAEMON_ARGS" != "$PROCESS_ARGS" ]; then
 			log_daemon_msg "Reloading $DESC" "${instance%%:*}"
@@ -144,9 +141,7 @@ do_reload() {
 			[ -f $PIDFILE ] && rm -f $PIDFILE
 			
 			# start process
-			start-stop-daemon --start -m --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
-                        PID=`cat $PIDFILE`
-                        echo $((PID+1)) > $PIDFILE
+			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
 		fi
 	done
 	return 0
