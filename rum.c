@@ -31,6 +31,7 @@ main (int ac, char *av[])
     char *tmp, *ptr;
     uv_signal_t *sigint;
     uv_signal_t *sigterm;
+    char *pidfile = NULL;
 
     struct destination *destination = NULL;
     struct listener *listener;
@@ -108,12 +109,13 @@ main (int ac, char *av[])
         {"failover", required_argument, 0, 'f'},
         {"read-timeout", required_argument, 0, 0},
         {"connect-timeout", required_argument, 0, 0},
+        {"pidfile", required_argument, 0, 'p'},
         {0, 0, 0, 0}
     };
 
 
     while ((ch =
-            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:", long_options,
+            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:", long_options,
                          &option_index)) != -1) {
         switch (ch) {
         case 0:
@@ -209,6 +211,10 @@ main (int ac, char *av[])
 
             break;
 
+        case 'p':
+            pidfile = strdup (optarg);
+            break;
+
         }
     }
 
@@ -285,8 +291,6 @@ main (int ac, char *av[])
     }
 
     if (daemonize) {
-        /* check for environment PIDFILE and write pid there */
-        char *pidfile = getenv("PIDFILE");
         if (pidfile) {
             FILE *fp = fopen(pidfile, "w");
             if (fp) {

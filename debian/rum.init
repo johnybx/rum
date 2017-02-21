@@ -55,10 +55,10 @@ do_start()
 	do
 		PIDFILE=/var/run/${instance%%:*}.pid
 		DAEMON_ARGS=${instance#*:}
-			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec /usr/bin/env PIDFILE=$PIDFILE $DAEMON --test > /dev/null \
+			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 				||  log_warning_msg "daemon was already running"
-			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec /usr/bin/env PIDFILE=$PIDFILE $DAEMON -- \
-				$DAEMON_ARGS \
+			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- \
+				$DAEMON_ARGS -p $PIDFILE \
 				|| log_failure_msg "daemon could not be started"
 		# Add code here, if necessary, that waits for the process to be ready
 		# to handle requests from services started subsequently which depend
@@ -88,7 +88,7 @@ do_stop()
 		# that waits for the process to drop all resources that could be
 		# needed by services started subsequently.  A last resort is to
 		# sleep for some time.
-		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --retry=0/30/KILL/5 --exec /usr/bin/env PIDFILE=$PIDFILE $DAEMON
+		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --retry=0/30/KILL/5 --exec $DAEMON
 		# Many daemons don't delete their pidfiles when they exit.
 		[ -f $PIDFILE ] && rm -f $PIDFILE
 	done
@@ -131,17 +131,17 @@ do_reload() {
 			unset PID
 			fi
 			# start not running process
-			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec /usr/bin/env PIDFILE=$PIDFILE $DAEMON -- $DAEMON_ARGS 
+			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS -p $PIDFILE
 			continue
 		elif [ "$DAEMON $DAEMON_ARGS" != "$PROCESS_ARGS" ]; then
 			log_daemon_msg "Reloading $DESC" "${instance%%:*}"
 				# stop running process with bad arguments
 			start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE --name $NAME
-			start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --retry=0/30/KILL/5 --exec /usr/bin/env PIDFILE=$PIDFILE $DAEMON
+			start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --retry=0/30/KILL/5 --exec $DAEMON
 			[ -f $PIDFILE ] && rm -f $PIDFILE
 			
 			# start process
-			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec /usr/bin/env PIDFILE=$PIDFILE $DAEMON -- $DAEMON_ARGS 
+			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS -p $PIDFILE
 		fi
 	done
 	return 0
