@@ -290,7 +290,7 @@ main (int ac, char *av[])
         if (pidfile) {
             FILE *fp = fopen(pidfile, "w");
             if (fp) {
-                fprintf (fp, "%d", getppid());
+                fprintf (fp, "%d", getpid());
                 fclose (fp);
             } else {
                 logmsg("cannot open pidfile %s (%s)", pidfile, strerror (errno));
