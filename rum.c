@@ -268,19 +268,18 @@ main (int ac, char *av[])
                            on_incoming_connection);
 
             if (r) {
-                fprintf (stderr, "listen to %s failed, retrying\n",
-                         listener->s);
+                logmsg ("listen to %s failed, retrying", listener->s);
                 uv_close ((uv_handle_t *) listener->stream, on_close_listener);
                 usleep (200 * 1000);
             } else {
-                fprintf (stdout, "listening on %s\n", listener->s);
+                logmsg ("listening on %s\n", listener->s);
                 ok = 1;
                 break;
             }
         }
 
         if (ok == 0) {
-            fprintf (stderr, "listen to %s failed, exiting\n", listener->s);
+            logmsg ("listen to %s failed, exiting", listener->s);
             _exit (-1);
         }
 
