@@ -258,7 +258,7 @@ on_incoming_connection (uv_stream_t * server, int status)
         uv_tcp_init (uv_default_loop (), (uv_tcp_t *) client);
     } else {
         client = malloc (sizeof (uv_pipe_t));
-        uv_pipe_init (uv_default_loop (), (uv_tcp_t *) client, 0);
+        uv_pipe_init (uv_default_loop (), (uv_pipe_t *) client, 0);
     }
 
     if (mode == MODE_NORMAL) {
