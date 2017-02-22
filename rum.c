@@ -272,7 +272,7 @@ main (int ac, char *av[])
                 uv_close ((uv_handle_t *) listener->stream, on_close_listener);
                 usleep (200 * 1000);
             } else {
-                logmsg ("listening on %s\n", listener->s);
+                logmsg ("listening on %s", listener->s);
                 ok = 1;
                 break;
             }

@@ -199,12 +199,17 @@ void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
 void on_write (uv_write_t * req, int status);
 void on_write_then_close (uv_write_t * req, int status);
 void on_write_free (uv_write_t * req, int status);
+void on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
 void on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
 
 /* mysql_callback.c */
+void mysql_on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
 void mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
 
 /* postgresql_callback.c */
+void postgresql_on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread,
+                         const uv_buf_t * buf);
+
 void postgresql_on_read (uv_stream_t * stream, ssize_t nread,
                          const uv_buf_t * buf);
 

@@ -12,18 +12,28 @@ alloc_cb (uv_handle_t * handle, size_t size, uv_buf_t * buf)
 }
 
 void
-on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
+on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
 {
     struct conn_data *conn_data = stream->data;
-    int r;
-    uv_stream_t *remote_stream;
 
     /* disable read timeout from server when we receive first data */
     if (conn_data->read_timer) {
         uv_timer_stop (conn_data->read_timer);
         uv_close ((uv_handle_t *) conn_data->read_timer, on_close_timer);
         conn_data->read_timer = NULL;
+        /* change callback to on_read() */
+        stream->read_cb = on_read;
     }
+
+    on_read(stream, nread, buf);
+}
+
+void
+on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
+{
+    struct conn_data *conn_data = stream->data;
+    int r;
+    uv_stream_t *remote_stream;
 
     /* if remote stream exist */
     if (conn_data->remote) {

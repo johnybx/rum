@@ -187,12 +187,12 @@ on_outgoing_connection (uv_connect_t * connect, int status)
 
     /* on successfull connect */
     if (mysql_cdb_file) {
-        r = uv_read_start (stream, alloc_cb, mysql_on_read);
+        r = uv_read_start (stream, alloc_cb, mysql_on_read_disable_read_timeout);
 
         if (r) {
         }
     } else if (postgresql_cdb_file) {
-        r = uv_read_start (stream, alloc_cb, on_read);
+        r = uv_read_start (stream, alloc_cb, on_read_disable_read_timeout);
 
         if (r) {
         }
@@ -221,7 +221,7 @@ on_outgoing_connection (uv_connect_t * connect, int status)
         r = uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
 
     } else {
-        r = uv_read_start (stream, alloc_cb, on_read);
+        r = uv_read_start (stream, alloc_cb, on_read_disable_read_timeout);
 
         if (r) {
         }
@@ -364,7 +364,7 @@ on_incoming_connection (uv_stream_t * server, int status)
 
             int r =
                 uv_read_start ((uv_stream_t *) client, alloc_cb,
-                               postgresql_on_read);
+                               postgresql_on_read_disable_read_timeout);
             if (r) {
                 logmsg ("%s: uv_read_start failed (%s)", __FUNCTION__,
                         uv_strerror (r));

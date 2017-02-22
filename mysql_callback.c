@@ -7,17 +7,27 @@ int cache_mysql_init_packet_len;
 char *cache_mysql_init_packet_scramble;
 
 void
-mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
+mysql_on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
 {
-    struct conn_data *conn_data = (struct conn_data *) stream->data;
+    struct conn_data *conn_data = stream->data;
 
     /* disable read timeout from server when we receive first data */
     if (conn_data->read_timer) {
         uv_timer_stop (conn_data->read_timer);
         uv_close ((uv_handle_t *) conn_data->read_timer, on_close_timer);
         conn_data->read_timer = NULL;
+        /* change callback to mysql_on_read() */
+        stream->read_cb = mysql_on_read;
     }
 
+    mysql_on_read(stream, nread, buf);
+}
+
+
+void
+mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
+{
+    struct conn_data *conn_data = (struct conn_data *) stream->data;
 
     if (conn_data->remote || (conn_data->mitm && conn_data->mitm->not_need_remote)) {
         if (nread > 0) {
