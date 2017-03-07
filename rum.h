@@ -171,7 +171,7 @@ struct mitm
 void usage ();
 void logmsg (const char *fmt, ...);
 int get_num_fds ();
-struct destination *add_destination (char *ptr);
+void add_destination (char *ptr);
 void randomize_destinations (void);
 void shuffle (struct destination **array, size_t n);
 

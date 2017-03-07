@@ -378,7 +378,7 @@ get_num_fds ()
 }
 
 /* add upstream server to linked list of struct destination */
-struct destination *
+void
 add_destination (char *ptr)
 {
     struct destination *destination = NULL, *dst, *last;
@@ -404,8 +404,6 @@ add_destination (char *ptr)
         first_destination = destination = malloc (sizeof (struct destination));
         prepare_upstream (ptr, destination);
     }
-
-    return destination;
 }
 
 void
