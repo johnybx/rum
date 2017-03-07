@@ -63,7 +63,7 @@ main (int ac, char *av[])
 
     pool = malloc (sizeof (*pool));
 
-    bufpool_init (pool, 64000);
+    bufpool_init (pool, BUF_SIZE);
 
 /*
     uv_timer_t *handle;

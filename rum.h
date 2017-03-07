@@ -53,9 +53,9 @@
 #define MODE_FAILOVER_RR 2      /* -r tcp:...,tcp:... */
 #define MODE_FAILOVER_R 3       /* -R tcp:...,tcp:... */
 
-/* we keep maximum of 100 pre-allocated buffers of 64000b size */
-#define BUFPOOL_CAPACITY 100
-#define BUF_SIZE 64000
+/* we keep maximum of 32 pre-allocated buffers of 8192b size */
+#define BUFPOOL_CAPACITY 16
+#define BUF_SIZE 8192
 
 typedef struct bufpool_s bufpool_t;
 
