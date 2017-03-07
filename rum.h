@@ -24,6 +24,7 @@
 #include <dirent.h>
 #include <getopt.h>
 #include <assert.h>
+#include <ctype.h>
 
 #include "uv.h"
 
@@ -193,6 +194,7 @@ void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
                 struct sockaddr_un *sun, socklen_t * socklen, in_port_t * port,
                 char **host_str, char **port_str, char **sockfile_str,
                 int unlink_socket);
+in_addr_t resolv_host_to_ip(char *host);
 
 /* default_callback.c */
 

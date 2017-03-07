@@ -11,6 +11,7 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
 {
     if (strstr (arg, "tcp:") == arg) {
         char *tmp;
+        int resolv = 0;
 
         *type = SOCKET_TCP;
 
@@ -29,9 +30,22 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
             *host_str="127.0.0.1";
         }
 
+        for (tmp = *host_str; *tmp; tmp++) {
+            if (isalpha(*tmp)) {
+                /* resolv host_str to ip */
+                resolv = 1;
+                break;
+            }
+        }
+
+
         *port = (uint16_t) atoi ((const char *) *port_str);
         memset (sin, 0, sizeof (struct sockaddr_in));
-        sin->sin_addr.s_addr = inet_addr (*host_str);
+        if (resolv) {
+            sin->sin_addr.s_addr = resolv_host_to_ip(*host_str);
+        } else {
+            sin->sin_addr.s_addr = inet_addr (*host_str);
+        }
         sin->sin_port = htons (*port);
         sin->sin_family = AF_INET;
 
@@ -57,4 +71,33 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
         }
         *socklen = sizeof (struct sockaddr_un);
     }
+}
+
+in_addr_t resolv_host_to_ip(char *host) {
+    /* resolv host_str to ip */
+    int s;
+    struct addrinfo hints;
+    struct addrinfo *result, *rp;
+    in_addr_t ip = 0;
+    struct sockaddr_in *h;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    s = getaddrinfo(host, NULL, &hints, &result);
+    if (s != 0) {
+        logmsg("error: getaddrinfo: %s (%s)", gai_strerror(s), host);
+        _exit(-1);
+    }
+
+    for(rp = result; rp != NULL; rp = rp->ai_next) 
+    {
+          h = (struct sockaddr_in *) rp->ai_addr;
+          ip = h->sin_addr.s_addr;
+          break;
+    }
+
+    freeaddrinfo (result);
+
+    return ip;
 }
