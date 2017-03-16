@@ -140,7 +140,10 @@ on_shutdown (uv_shutdown_t * shutdown, int status)
         }
     }
 
-    uv_close ((uv_handle_t *) shutdown->handle, on_close);
+    if (!conn_data->uv_closed) {
+        uv_close ((uv_handle_t *) shutdown->handle, on_close);
+        conn_data->uv_closed = 1;
+    }
     free (shutdown);
 }
 
@@ -148,6 +151,8 @@ void
 on_connect_timeout (uv_timer_t * timer)
 {
     struct conn_data *conn_data = timer->data;
+
+    conn_data->destination->nr_conn++;
 
     /* release timer */
     uv_timer_stop (timer);
@@ -157,11 +162,15 @@ on_connect_timeout (uv_timer_t * timer)
         logmsg ("timeout connecting to upstream %s", conn_data->destination->s);
     }
 
+    if (conn_data->remote) {
+        conn_data->remote->remote = NULL;
+    }
+
     /* close socket */
     conn_data->connect_timer = NULL;
     /* we cannot call here uv_shutdown because it will fail (socket is not connected) */
     conn_data->uv_closed = 1;
-    uv_close ((uv_handle_t *) conn_data->stream, on_close_after_timeout);
+    uv_close ((uv_handle_t *) conn_data->stream, on_close);
 }
 
 void
@@ -203,16 +212,6 @@ on_close (uv_handle_t * handle)
     free (handle);
     free (conn_data);
 }
-
-void
-on_close_after_timeout (uv_handle_t * handle)
-{
-    struct conn_data *conn_data = handle->data;
-
-    free (handle);
-    free (conn_data);
-}
-
 
 void
 on_close_listener (uv_handle_t * handle)

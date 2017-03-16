@@ -139,7 +139,7 @@ on_outgoing_connection (uv_connect_t * connect, int status)
         }
 
         if (mode == MODE_NORMAL) {
-        logmsg("connection to upstream %s failed (%s)", conn_data->destination->s, uv_strerror (status));
+            logmsg("connection to upstream %s failed (%s)", conn_data->destination->s, uv_strerror (status));
             /* connection failed, close client socket */
             if (conn_data->remote) {
                 conn_data->remote->remote = NULL;
