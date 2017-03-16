@@ -180,6 +180,7 @@ void on_shutdown (uv_shutdown_t * shutdown, int status);
 void on_close_timer (uv_handle_t * handle);
 void on_close_listener (uv_handle_t * handle);
 void on_close (uv_handle_t * handle);
+void on_close_handle (uv_handle_t * handle);
 struct conn_data *create_server_connection (struct conn_data *conn_data_client,
                                             struct destination *destination,
                                             struct listener *listener);

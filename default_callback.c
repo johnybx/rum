@@ -157,6 +157,7 @@ on_connect_timeout (uv_timer_t * timer)
     /* release timer */
     uv_timer_stop (timer);
     uv_close ((uv_handle_t *) timer, on_close_timer);
+    conn_data->connect_timer = NULL;
 
     if (conn_data->destination) {
         logmsg ("timeout connecting to upstream %s", conn_data->destination->s);
@@ -167,7 +168,6 @@ on_connect_timeout (uv_timer_t * timer)
     }
 
     /* close socket */
-    conn_data->connect_timer = NULL;
     /* we cannot call here uv_shutdown because it will fail (socket is not connected) */
     conn_data->uv_closed = 1;
     uv_close ((uv_handle_t *) conn_data->stream, on_close);
@@ -212,6 +212,14 @@ on_close (uv_handle_t * handle)
     free (handle);
     free (conn_data);
 }
+
+/* edge case: if uv_tcp_connect fail we dont allocate conn_data, free only handle */
+void
+on_close_handle (uv_handle_t * handle)
+{
+    free (handle);
+}
+
 
 void
 on_close_listener (uv_handle_t * handle)

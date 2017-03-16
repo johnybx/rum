@@ -152,6 +152,18 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
 
     conn_data_remote =
         create_server_connection (conn_data, destination, conn_data->listener);
+    if (!conn_data_remote) {
+        if (pg_server)
+            free (pg_server);
+
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
+        }
+
+        return 1;
+    }
+
     conn_data->mitm->not_need_remote = 0;
     conn_data_remote->mitm = conn_data->mitm;
     conn_data_remote->listener = conn_data->listener;

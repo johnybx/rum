@@ -392,17 +392,37 @@ create_server_connection (struct conn_data *conn_data_client,
     uv_stream_t *target;
     uv_connect_t *connect;
     struct conn_data *conn_data_target;
+    int ret = 0;
 
     if (destination->s[0] == SOCKET_TCP) {
         target = malloc (sizeof (uv_tcp_t));
-        uv_tcp_init (uv_default_loop (), (uv_tcp_t *) target);
+        ret = uv_tcp_init (uv_default_loop (), (uv_tcp_t *) target);
+        if (ret) {
+            logmsg("%s: uv_tcp_init: %s", __FUNCTION__, uv_strerror(ret));
+            free (target);
+            return NULL;
+        }
+
         connect = (uv_connect_t *) malloc (sizeof (uv_connect_t));
-        uv_tcp_connect (connect, (uv_tcp_t *) target,
+        ret = uv_tcp_connect (connect, (uv_tcp_t *) target,
                         (struct sockaddr *) &destination->sin,
                         on_outgoing_connection);
+
+        if (ret) {
+            logmsg("%s: uv_tcp_connect: %s", __FUNCTION__, uv_strerror(ret));
+            free (connect);
+            uv_close ((uv_handle_t *) target, on_close_handle);
+            return NULL;
+        }
     } else {
         target = malloc (sizeof (uv_pipe_t));
-        uv_pipe_init (uv_default_loop (), (uv_pipe_t *) target, 0);
+        ret = uv_pipe_init (uv_default_loop (), (uv_pipe_t *) target, 0);
+        if (ret) {
+            logmsg("%s: uv_pipe_init: %s", __FUNCTION__, uv_strerror(ret));
+            free (target);
+            return NULL;
+        }
+
         connect = (uv_connect_t *) malloc (sizeof (uv_connect_t));
         uv_pipe_connect (connect, (uv_pipe_t *) target,
                          destination->sun.sun_path, on_outgoing_connection);
