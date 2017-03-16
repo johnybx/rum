@@ -141,6 +141,15 @@ on_shutdown (uv_shutdown_t * shutdown, int status)
     }
 
     if (!conn_data->uv_closed) {
+        struct linger l = {
+            .l_onoff = 1,
+            .l_linger = 0
+        };
+        uv_os_fd_t fd;
+        uv_fileno ((uv_handle_t *) shutdown->handle, &fd);
+        setsockopt (fd, SOL_SOCKET, SO_LINGER,
+                (void *) &l, sizeof (l));
+
         uv_close ((uv_handle_t *) shutdown->handle, on_close);
         conn_data->uv_closed = 1;
     }
