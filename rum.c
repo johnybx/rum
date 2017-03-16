@@ -36,11 +36,16 @@ main (int ac, char *av[])
     struct destination *destination = NULL;
     struct listener *listener;
 
-    struct rlimit fdlimit;
-    fdlimit.rlim_cur = 65535;
-    fdlimit.rlim_max = 65535;
+    struct rlimit rl;
+    rl.rlim_cur = 65535;
+    rl.rlim_max = 65535;
 
-    setrlimit (RLIMIT_NOFILE, &fdlimit);
+    setrlimit (RLIMIT_NOFILE, &rl);
+
+    rl.rlim_cur = RLIM_INFINITY;
+    rl.rlim_max = RLIM_INFINITY;
+
+    setrlimit (RLIMIT_CORE, &rl);
 
     signal (SIGPIPE, SIG_IGN);
 
