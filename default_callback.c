@@ -161,7 +161,7 @@ on_connect_timeout (uv_timer_t * timer)
     conn_data->connect_timer = NULL;
     /* we cannot call here uv_shutdown because it will fail (socket is not connected) */
     conn_data->uv_closed = 1;
-    uv_close ((uv_handle_t *) conn_data->stream, on_close);
+    uv_close ((uv_handle_t *) conn_data->stream, on_close_after_timeout);
 }
 
 void
@@ -203,6 +203,16 @@ on_close (uv_handle_t * handle)
     free (handle);
     free (conn_data);
 }
+
+void
+on_close_after_timeout (uv_handle_t * handle)
+{
+    struct conn_data *conn_data = handle->data;
+
+    free (handle);
+    free (conn_data);
+}
+
 
 void
 on_close_listener (uv_handle_t * handle)
