@@ -11,7 +11,7 @@ Homepage: http://oss.websupport.sk/rum/
 Package: rum
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, libcdb1
-Description: One process tcp redirector with socket file support and more listen ports/socket files, using libevent
-  rum is one process tcp redirector with socket file support and more listen ports/socket files, using libevent
+Description: One process tcp redirector with socket file support and more listen ports/socket files, using libuv
+  rum is one process tcp redirector with socket file support and more listen ports/socket files, using libuv
   It's also mysql reverse proxy for more mysql servers (the key to select destination server is username send by client) using
   cdb database.
