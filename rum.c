@@ -306,7 +306,7 @@ main (int ac, char *av[])
         }
     }
 
-    /* main libevent loop */
+    /* main libuv loop */
     uv_run (uv_default_loop (), UV_RUN_DEFAULT);
 
     /* SIGINT || SIGTERM received, clean up */
