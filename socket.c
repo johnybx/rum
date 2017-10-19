@@ -184,6 +184,7 @@ on_outgoing_connection (uv_connect_t * connect, int status)
     conn_data->stream = stream;
 
     uv_tcp_nodelay ((uv_tcp_t *) stream, 1);
+    uv_tcp_keepalive ((uv_tcp_t *) stream, 1, 60);
 
     /* on successfull connect */
     if (mysql_cdb_file) {
