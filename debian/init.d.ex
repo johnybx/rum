@@ -152,7 +152,7 @@ do_status() {
                 PROCESS_NAME=$(ps -p $PROCESS -o comm= 2> /dev/null)
 
                 PROCESS_ARGS=$(ps -p $PROCESS -o args= 2> /dev/null)
-                DAEMON_ARGS=${instance#*:}
+                DAEMON_ARGS="${instance#*:} -p ${PIDFILE}"
 
 		if [ "rum" != "$PROCESS_NAME" ]; then
 			echo ${instance%%:*} is not running
