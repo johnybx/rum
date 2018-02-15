@@ -8,6 +8,7 @@ extern bufpool_t *pool;
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern struct destination *first_destination;
+extern int loglogins;
 
 /* initialize struct mitm */
 struct mitm *
@@ -271,6 +272,19 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
     if (mysql_server != NULL) {
         destination = add_destination(mysql_server);
+
+        if (loglogins) {
+          struct sockaddr_in sa_in;
+          int sa_size = sizeof (struct sockaddr_in);
+          char *ip = NULL;
+          if (conn_data->listener->s[0]=='t') {
+            uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa_in, &sa_size);
+            ip = inet_ntoa(sa_in.sin_addr);
+            logmsg ("%s: user %s login from %s", __FUNCTION__, user, ip);
+          } else {
+            logmsg ("%s: user %s login from socket", __FUNCTION__, user);
+          }
+        }
     } else {
         /* if user is not found in cdb, sent client error msg & close connection  */
         destination = first_destination;

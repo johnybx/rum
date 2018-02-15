@@ -14,6 +14,7 @@ int destinations = 0;
 int connect_timeout = CONNECT_TIMEOUT;
 int read_timeout = READ_TIMEOUT;
 int daemonize = 0;
+int loglogins = 0;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -115,12 +116,13 @@ main (int ac, char *av[])
         {"read-timeout", required_argument, 0, 0},
         {"connect-timeout", required_argument, 0, 0},
         {"pidfile", required_argument, 0, 'p'},
+        {"loglogins", no_argument, 0, 'L'},
         {0, 0, 0, 0}
     };
 
 
     while ((ch =
-            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:", long_options,
+            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:L", long_options,
                          &option_index)) != -1) {
         switch (ch) {
         case 0:
@@ -173,6 +175,9 @@ main (int ac, char *av[])
             break;
         case 'l':
             logfile = strdup (optarg);
+            break;
+        case 'L':
+            loglogins = 1;
             break;
         case 't':
             mysqltype = optarg;
