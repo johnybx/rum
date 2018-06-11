@@ -1,6 +1,5 @@
 # rum
 
-
 ## What is rum
 * event-based one process tcp redirector with socket file support and more listen ports/socket files, using libevent
 * mysql reverse proxy for more mysql servers (the key to select destination server is username send by client)
