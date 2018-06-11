@@ -48,7 +48,7 @@ make
 hostname -> ip resolving is done only once at start, it is not refreshed.
 
 ## MySQL reverse proxy feature
-![alt text](https://github.com/websupport-sk/rum/blob/master/images/rum-mysql.png?raw=true "this is how it works")
+![alt text](https://raw.githubusercontent.com/websupport-sk/rum-old/master/images/rum-mysql.png "this is how it works")
 * this feature is enabled when -M /path/to/cdb is used
 * cdb database is used for searching destination server from username send by client
 * hashed user passwords from every mysql server must be stored in cdb database to successfuly create connections - -d must be also used as default destination server (when user is not found in cdb database rum connect to this server, but auth always fails, we need to know user password)
