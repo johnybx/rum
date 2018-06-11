@@ -47,18 +47,18 @@ make
 ## Dns lookups
 hostname -> ip resolving is done only once at start, it is not refreshed.
 
-## MySQL reverse proxy feature
+## MySQL/PostGreSQL reverse proxy feature
 ![alt text](https://github.com/websupport-sk/rum/blob/master/images/rum.png?raw=true "this is how it works")
 * this feature is enabled when -M /path/to/cdb is used
 * cdb database is used for searching destination server from username send by client
-* hashed user passwords from every mysql server must be stored in cdb database to successfuly create connections - -d must be also used as default destination server (when user is not found in cdb database rum connect to this server, but auth always fails, we need to know user password)
+* hashed user passwords from every mysql/posgresql server must be stored in cdb database to successfuly create connections - -d must be also used as default destination server (when user is not found in cdb database rum connect to this server, but auth always fails, we need to know user password)
 * in cdb file the format is:
     key -> value
     username -> password\0dst_server\0
 
-Why is user password need ? there is explanation:
+Why is user password needed? there is explanation:
 
 [http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#4.1_and_later]
 
 ## Creating cdb database for MySQL proxy
-contrib/export_mysql_cdb.pl is perl script which can be run every 1 minute or so. cdb file is automatically regenerated from mysql server list and rum dont need restart.
+contrib/export_mysql_cdb.pl is perl script which can be run every 1 minute or so. cdb file is automatically regenerated from mysql server list and rum doesn't need a restart.
