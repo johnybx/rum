@@ -18,6 +18,9 @@ apt-get install libcdb-dev libevent-dev
 make
 ```
 
+## Supported
+ * Tested & Developed on: Ubuntu 14.04-18.04
+
 ## Usage
 ```
 ./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] -d tcp:host:port [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb]
