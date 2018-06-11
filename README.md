@@ -64,4 +64,5 @@ Why is user password needed? there is explanation:
 [http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#4.1_and_later]
 
 ## Creating cdb database for proxy
-contrib/export_mysql_cdb.pl is perl script which can be run every 1 minute or so. cdb file is automatically regenerated from mysql server list and rum doesn't need a restart.
+* contrib/export_mysql_cdb.pl is perl script which can be run every 1 minute or so. cdb file is automatically regenerated from mysql server list and rum doesn't need a restart.
+* export_postgresql_cdb.pl	the same script, but for postgresql
