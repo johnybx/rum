@@ -1,7 +1,7 @@
 # rum
 
 ## What is rum
-* event-based one process tcp redirector with socket file support and more listen ports/socket files, using libevent
+* event-based one process tcp redirector with socket file support and more listen ports/socket files, using libuv
 * mysql reverse proxy for more mysql servers (the key to select destination server is username send by client)
 
 ## Database Support
@@ -10,11 +10,11 @@
 
 ## Requirments
 * libcdb
-* libevent >=2.0
+* libuv
 
 ## Compilation
 ```
-apt-get install libcdb-dev libevent-dev
+apt-get install libcdb-dev libuv1-dev
 make
 ```
 
