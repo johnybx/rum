@@ -53,6 +53,12 @@ init_mysql_cdb_file (char *type)
             memcpy (cache_mysql_init_packet, MYSQL57_INIT_PACKET,
                     sizeof (MYSQL57_INIT_PACKET) - 1);
             cache_mysql_init_packet_len = sizeof (MYSQL57_INIT_PACKET) - 1;
+        } else if (!strcmp (type, "mysql80")) {
+            cache_mysql_init_packet =
+                malloc (sizeof (MYSQL80_INIT_PACKET) - 1);
+            memcpy (cache_mysql_init_packet, MYSQL80_INIT_PACKET,
+                    sizeof (MYSQL80_INIT_PACKET) - 1);
+            cache_mysql_init_packet_len = sizeof (MYSQL80_INIT_PACKET) - 1;
         } else {
             fprintf (stderr, "unknown mysql type: %s", type);
             exit (-1);
