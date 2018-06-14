@@ -4,6 +4,8 @@
 #include "mysql_password/mysql_com.h"
 #include "mysql_password/sha1.h"
 
+#include <byteswap.h>
+
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern struct destination *first_destination;
@@ -176,8 +178,7 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
                                 const uv_buf_t * uv_buf, size_t nread)
 {
     char user[64];
-    char buf[512];
-    int user_len, buflen;
+    int user_len;
     struct conn_data *conn_data_remote;
     struct destination *destination = NULL;
     char *mysql_server = NULL, *c, *i, *userptr;
@@ -236,8 +237,28 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
              MYSQL_AUTH_PACKET_USER_POS, user_len);
     user[user_len] = '\0';
 
-    get_data_from_cdb (user, user_len, &mysql_server,
-                       &conn_data->mitm->password);
+    if (geo && conn_data->stream->type == UV_TCP) {
+        ip_mask_pair_t* allowed_ips = NULL;
+        geo_country_t* allowed_countries = NULL;
+        get_data_from_cdb (user, user_len, &mysql_server,
+                           &conn_data->mitm->password, &allowed_ips, &allowed_countries);
+
+        struct sockaddr_in peer;
+        int peer_len = sizeof(peer);
+        if (0 == uv_tcp_getpeername((uv_tcp_t*) conn_data->stream, (struct sockaddr*) &peer, &peer_len)) {
+            bool ip_check = !allowed_ips || ip_in_networks(peer.sin_addr.s_addr, allowed_ips);
+            bool country_check = !allowed_countries || ip_in_countries(peer.sin_addr.s_addr, allowed_countries);
+
+            if (!ip_check && !country_check) {
+                logmsg("Disconnected %s, country check: %u, ip check: %u failed", user, country_check, ip_check);
+                send_mysql_error(conn_data, "Access denied, login from unauthorized ip or country");
+                return 1;
+            }
+        }
+    } else {
+        get_data_from_cdb (user, user_len, &mysql_server,
+                           &conn_data->mitm->password, NULL, NULL);
+    }
 
     /* another size check if we know user_len, there must be at least 21 bytes after username
      * 1 byte length
@@ -287,41 +308,8 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
         logmsg ("user %s not found in cdb from %s%s", user, get_ipport (conn_data), get_sslinfo (conn_data));
         /* we reply access denied  */
-        memcpy (buf, ERR_LOGIN_PACKET_PREFIX,
-                sizeof (ERR_LOGIN_PACKET_PREFIX));
-        buflen =
-            snprintf (buf + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1,
-                      sizeof (buf) - sizeof (ERR_LOGIN_PACKET_PREFIX),
-                      "Access denied, unknown user '%s'", user);
-        buf[0] = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 5;
 
-        if (conn_data->ssl) {
-            increment_packet_seq(buf);
-            SSL_write(conn_data->ssl, buf, buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
-            flush_ssl(conn_data);
-        } else {
-            uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
-            uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-            newbuf->base = malloc (buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
-
-            memcpy (newbuf->base, buf,
-                    buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
-            newbuf->len = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1;
-            req->data = newbuf;
-            if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
-                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-                if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-                    free (shutdown);
-                }
-                return 1;
-            }
-        }
-
-        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-            free (shutdown);
-        }
-
+        send_mysql_error(conn_data, "Access denied, unknown user '%s'", user);
 
         if (mysql_server)
             free (mysql_server);
@@ -619,4 +607,46 @@ print_packet_seq(char *packet)
     char *ptr;
     ptr =  packet + MYSQL_PACKET_HEADER_SIZE - 1;
     memcpy (&seqnr, (void *)ptr, sizeof(uint8_t));
+}
+
+void send_mysql_error(struct conn_data* conn_data, const char* fmt, ...)
+{
+    char buf[512];
+    int buflen;
+
+    memcpy (buf, ERR_LOGIN_PACKET_PREFIX,
+            sizeof (ERR_LOGIN_PACKET_PREFIX));
+
+    va_list ap;
+    va_start(ap, fmt);
+
+    buflen =
+            vsnprintf (buf + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1,
+                      sizeof (buf) - sizeof (ERR_LOGIN_PACKET_PREFIX),
+                      fmt, ap);
+
+    va_end(ap);
+
+    buf[0] = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 5;
+
+    if (conn_data->ssl) {
+        increment_packet_seq(buf);
+        SSL_write(conn_data->ssl, buf, buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
+        flush_ssl(conn_data);
+    } else {
+        uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+        uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+        newbuf->base = malloc (buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
+
+        memcpy (newbuf->base, buf,
+                buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
+        newbuf->len = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1;
+        req->data = newbuf;
+        uv_write (req, conn_data->stream, newbuf, 1, on_write);
+
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
+        }
+    }
 }

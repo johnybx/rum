@@ -25,8 +25,10 @@
 #include <getopt.h>
 #include <assert.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 #include "uv.h"
+#include "geoip.h"
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
@@ -65,6 +67,7 @@
 #define MODE_FAILOVER_RR 2      /* -r tcp:...,tcp:... */
 #define MODE_FAILOVER_R 3       /* -R tcp:...,tcp:... */
 
+extern geo_t* geo;
 struct listener
 {
     uv_stream_t *stream;        /* listening stream */
@@ -166,6 +169,19 @@ struct mitm
     char *password;
 };
 
+typedef struct __attribute__((packed)) {
+    uint32_t ip;
+    uint32_t mask;
+} ip_mask_pair_t;
+
+enum user_flag_e {
+    USER_FLAG_IP_CHECK_ENABLED      = 1 << 0,
+    USER_FLAG_COUNTRY_CHECK_ENABLED = 1 << 1,
+};
+
+bool ip_in_networks(uint32_t ip, ip_mask_pair_t* network);
+bool ip_in_countries(uint32_t ip, geo_country_t* countries);
+
 /* main.c */
 void usage ();
 void logmsg (const char *fmt, ...);
@@ -250,22 +266,26 @@ void decrement_packet_seq(char *packet);
 void increment_packet_seq(char *packet);
 void print_packet_seq(char *packet);
 
+void send_mysql_error(struct conn_data* conn_data, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+void send_postgres_error(struct conn_data* conn_data, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 
 /* mysql_cdb.h */
 void stop_mysql_cdb_file();
 void init_mysql_cdb_file ();
 void get_data_from_cdb (char *user, int user_len, char **mysql_server,
-                        char **mysql_password);
+                        char **mysql_password, ip_mask_pair_t** allowed_ips, geo_country_t** allowed_countries);
 void reopen_cdb (uv_timer_t * handle);
 
 
 /* postgresql_cdb.h */
 void stop_postgresql_cdb_file();
 void init_postgresql_cdb_file ();
-void get_data_from_cdb_postgresql (char *user, int user_len,
-                                   char **postgresql_server);
+void get_data_from_cdb_postgresql (char *user, int user_len, char **postgresql_server,
+                                   ip_mask_pair_t** allowed_ips, geo_country_t** allowed_countries);
 void reopen_cdb_postgresql (uv_timer_t* handle);
 
+void get_ip_access_from_cdb_tail(const char* buf, unsigned int size,
+                                 ip_mask_pair_t** allowed_ips, geo_country_t** countries);
 
 /* stats.c */
 void send_stats_to_client (uv_stream_t * stream);

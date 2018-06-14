@@ -9,12 +9,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
                                    const uv_buf_t * uv_buf, size_t nread)
 {
     char user[64];
-    char buf[512];
-    char buf1[512];
-    char buf2[512];
-    char buf3[512];
-    char buf4[512];
-    int user_len, buflen, buflen_htonl, buf1len, buf2len, buf3len, buf4len;
+    int user_len;
     struct destination *destination = NULL;
     char *pg_server = NULL, *userptr;
     struct conn_data *conn_data_remote;
@@ -98,7 +93,30 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
              sizeof ("user"), user_len);
     user[user_len] = '\0';
 
-    get_data_from_cdb_postgresql (user, user_len, &pg_server);
+    if (geo && conn_data->stream->type == UV_TCP) {
+        ip_mask_pair_t* allowed_ips = NULL;
+        geo_country_t* allowed_countries = NULL;
+        get_data_from_cdb_postgresql (user, user_len, &pg_server, &allowed_ips, &allowed_countries);
+
+        struct sockaddr_in peer;
+        int peer_len = sizeof(peer);
+        if (0 == uv_tcp_getpeername((uv_tcp_t*) conn_data->stream, (struct sockaddr*) &peer, &peer_len)) {
+            bool ip_check = !allowed_ips || ip_in_networks(peer.sin_addr.s_addr, allowed_ips);
+            bool country_check = !allowed_countries || ip_in_countries(peer.sin_addr.s_addr, allowed_countries);
+
+            if (!ip_check && !country_check) {
+                logmsg("Disconnected %s, country check: %u, ip check: %u failed", user, country_check, ip_check);
+                send_postgres_error(conn_data, "Access denied, login from unauthorized ip or country");
+
+                if (pg_server)
+                    free (pg_server);
+
+                return 1;
+            }
+        }
+    } else {
+        get_data_from_cdb_postgresql (user, user_len, &pg_server, NULL, NULL);
+    }
 
     if (pg_server != NULL) {
         destination = add_destination(pg_server);
@@ -106,46 +124,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         /* if user is not found in cdb, sent client error msg & close connection  */
         logmsg ("user %s not found in cdb from %s%s", user, get_ipport (conn_data), get_sslinfo (conn_data));
 
-        memset (buf, '\0', sizeof (buf));
-        buf[0] = 'E';
-        buf1len = snprintf (buf1, sizeof (buf1), "SFATAL");
-        buf2len = snprintf (buf2, sizeof (buf2), "C28P01");
-        buf3len =
-            snprintf (buf3, sizeof (buf3), "MUser \"%s\" not found", user);
-        buf4len = snprintf (buf4, sizeof (buf4), "Rauth_failed");
-        buflen =
-            1 + 4 + buf1len + 1 + buf2len + 1 + buf3len + 1 + buf4len + 1 + 1;
-        buflen_htonl = htonl (buflen - 1);
-        memcpy (buf + 1, &buflen_htonl, sizeof (buflen_htonl));
-        memcpy (buf + 1 + 4, buf1, buf1len);
-        memcpy (buf + 1 + 4 + buf1len + 1, buf2, buf2len);
-        memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1, buf3, buf3len);
-        memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1 + buf3len + 1, buf4,
-                buf4len);
-
-        if (conn_data->ssl) {
-            int rc = SSL_write(conn_data->ssl, buf, buflen);
-            if (rc > 0) {
-                flush_ssl(conn_data);
-            }
-        } else {
-            uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-            newbuf->base = malloc (buflen);
-            newbuf->len = buflen;
-            memcpy (newbuf->base, buf, buflen);
-
-            uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
-            req->data = newbuf;
-            if (uv_write (req, conn_data->stream, newbuf, 1, on_write_free)) {
-                free (newbuf->base);
-                free (newbuf);
-                free (req);
-                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-                if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-                    free (shutdown);
-                }
-            }
-        }
+        send_postgres_error(conn_data, "MUser \"%s\" not found", user);
 
         if (pg_server)
             free (pg_server);
@@ -207,4 +186,58 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
     uv_read_stop (conn_data->stream);
 
     return 1;
+}
+
+void send_postgres_error(struct conn_data* conn_data, const char* fmt, ...)
+{
+    char buf[512];
+    char buf1[512];
+    char buf2[512];
+    char buf3[512];
+    char buf4[512];
+    int buflen, buflen_htonl, buf1len, buf2len, buf3len, buf4len;
+
+    memset (buf, '\0', sizeof (buf));
+    buf[0] = 'E';
+    buf1len = snprintf (buf1, sizeof (buf1), "SFATAL");
+    buf2len = snprintf (buf2, sizeof (buf2), "C28P01");
+
+    va_list ap;
+    va_start(ap, fmt);
+
+    buf3len =
+            vsnprintf (buf3, sizeof (buf3), fmt, ap);
+    buf4len = snprintf (buf4, sizeof (buf4), "Rauth_failed");
+    buflen =
+            1 + 4 + buf1len + 1 + buf2len + 1 + buf3len + 1 + buf4len + 1 + 1;
+    buflen_htonl = htonl (buflen - 1);
+    memcpy (buf + 1, &buflen_htonl, sizeof (buflen_htonl));
+    memcpy (buf + 1 + 4, buf1, buf1len);
+    memcpy (buf + 1 + 4 + buf1len + 1, buf2, buf2len);
+    memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1, buf3, buf3len);
+    memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1 + buf3len + 1, buf4,
+            buf4len);
+
+    if (conn_data->ssl) {
+        int rc = SSL_write(conn_data->ssl, buf, buflen);
+        if (rc > 0) {
+            flush_ssl(conn_data);
+        }
+    } else {
+        uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+        uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+        newbuf->base = malloc (buflen);
+        newbuf->len = buflen;
+        memcpy (newbuf->base, buf, buflen);
+        req->data = newbuf;
+        if (uv_write (req, conn_data->stream, newbuf, 1, on_write_free)) {
+            free (newbuf->base);
+            free (newbuf);
+            free (req);
+            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                free (shutdown);
+            }
+        }
+    }
 }

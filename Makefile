@@ -4,15 +4,15 @@ LD=clang
 LIBUV_DIR=libuv-v1.29.1
 
 #LDFLAGS=-flto
-LDLIBS=-L ${LIBUV_DIR}/.libs -lrt -lcdb -lm -lpthread -ldl -lcrypto -lssl
+LDLIBS=-L ${LIBUV_DIR}/.libs -lrt -lcdb -lm -lpthread -ldl -lcrypto -lssl -lsqlite3
 #CFLAGS=-Wall -O2 -flto -g -I ${LIBUV_DIR}/include
 CFLAGS=-Wall -Wextra -march=sandybridge -O2 -flto -g -I ${LIBUV_DIR}/include
 LDFLAGS=-Wall -Wextra -march=sandybridge -O2 -flto -fuse-linker-plugin -g
 
 all: ${LIBUV_DIR}/.libs/libuv.a rum 
 
-rum: rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o parse_arg.o mysql_password/sha1.o mysql_password.o
-	$(CC) $(LDFLAGS) rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o mysql_password/sha1.o mysql_password.o parse_arg.o -o rum ${LIBUV_DIR}/.libs/libuv.a $(LDLIBS)
+rum: rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o parse_arg.o mysql_password/sha1.o mysql_password.o geoip.o
+	$(CC) $(LDFLAGS) rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o mysql_password/sha1.o mysql_password.o parse_arg.o geoip.o -o rum ${LIBUV_DIR}/.libs/libuv.a $(LDLIBS)
 #	$(CC) $(LDFLAGS) rum.o socket.o default_callback.o mysql_callback.o postgresql_callback.o stats.o mysql_cdb.o postgresql_cdb.o mysql_mitm.o postgresql_mitm.o mysql_password/sha1.o mysql_password.o parse_arg.o -o rum ${LIBUV_DIR}/.libs/libuv.a jemalloc-4.4.0/lib/libjemalloc.a $(LDLIBS)
 	#strip rum
 

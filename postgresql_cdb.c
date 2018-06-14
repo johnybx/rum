@@ -38,8 +38,8 @@ init_postgresql_cdb_file (char *type)
  * OUT postgresql_server - if user is found in cdb we fill it with "tcp:host:port"
  */
 void
-get_data_from_cdb_postgresql (char *user, int user_len,
-                              char **postgresql_server)
+get_data_from_cdb_postgresql (char *user, int user_len, char **postgresql_server,
+                              ip_mask_pair_t** allowed_ips, geo_country_t** allowed_countries)
 {
     int result;
     unsigned int dlen;
@@ -65,7 +65,14 @@ get_data_from_cdb_postgresql (char *user, int user_len,
 
     result = cdb_read (&postgresql_cdb, tmp, dlen, dpos);
 
-    *postgresql_server = strdup (tmp + 1);
+    *postgresql_server = strdup (tmp + strlen(tmp) + 1);
+
+    unsigned int read = 1 + strlen(*postgresql_server) + 2;
+    unsigned int remaining = dlen - read;
+
+    if (remaining >= 1 && allowed_ips && allowed_countries) {
+        get_ip_access_from_cdb_tail(&tmp[read], remaining, allowed_ips, allowed_countries);
+    }
 
     return;
 }

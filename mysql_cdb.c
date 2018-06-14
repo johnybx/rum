@@ -100,7 +100,8 @@ init_mysql_cdb_file (char *type)
  */
 void
 get_data_from_cdb (char *user, int user_len, char **mysql_server,
-                   char **mysql_password)
+                   char **mysql_password, ip_mask_pair_t** allowed_ips,
+                   geo_country_t** allowed_countries)
 {
     int result;
     unsigned int dlen;
@@ -130,6 +131,14 @@ get_data_from_cdb (char *user, int user_len, char **mysql_server,
 
     *mysql_password = strdup (tmp);
     *mysql_server = strdup (tmp + strlen (*mysql_password) + 1);
+
+
+    unsigned int read = strlen(*mysql_password) + strlen(*mysql_server) + 2;
+    unsigned int remaining = dlen - read;
+
+    if (remaining >= 1 && allowed_ips && allowed_countries) {
+        get_ip_access_from_cdb_tail(&tmp[read], remaining, allowed_ips, allowed_countries);
+    }
 
     return;
 }

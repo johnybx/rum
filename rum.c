@@ -21,8 +21,8 @@ char *ssl_ciphers = SSL_CIPHERS;
 char *ssl_min_proto = NULL;
 char *ssl_max_proto = NULL;
 int verbose = 0;
-
 char *mysqltype = NULL;
+geo_t* geo = NULL;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -105,12 +105,13 @@ main (int ac, char *av[])
         {"ssl-ciphers", required_argument, 0, 0},
         {"ssl-min-proto", required_argument, 0, 0},
         {"ssl-max-proto", required_argument, 0, 0},
+        {"geoip", required_argument, 0, 'g'},
         {0, 0, 0, 0}
     };
 
 
     while ((ch =
-            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:L", long_options,
+            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:Lg:", long_options,
                          &option_index)) != -1) {
         switch (ch) {
         case 0:
@@ -224,6 +225,10 @@ main (int ac, char *av[])
             pidfile = strdup (optarg);
             break;
 
+        case 'g':
+            logmsg("Using geoip db %s", optarg);
+            geo = geo_new(optarg);
+            break;
         }
     }
 
@@ -382,6 +387,9 @@ main (int ac, char *av[])
         free (postgresql_cdb_file);
     }
 
+    if (geo) {
+        geo_destroy(geo);
+    }
 
     struct destination *dst;
     dst = first_destination;
@@ -422,13 +430,6 @@ usage ()
          "-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d"
          "\n\t"
          "-b - goto background"
-         "\n\t"
-         "-m - statistics port"
-         "\n\t"
-         "-M - enable handling of mysql connection with more destination servers, argument is path to cdb file"
-         "\n\t"
-         "-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file"
-         "\n\t"
          "-L - log logins to syslog (when using -M or -P)"
          "\n\t"
          "--connect-timeout 6 - connect timeout when server is not available (default 6)"
@@ -447,6 +448,7 @@ usage ()
          "\n\t"
          "--ssl-max-proto proto (default tls1.2)"
          "\n\t"
+         "-g - enable ip/geoip protection (with -M|-P)"
          "\n\n", SSL_CIPHERS);
     exit (-1);
 }
@@ -580,6 +582,69 @@ shuffle (struct destination **array, size_t n)
             struct destination *t = array[j];
             array[j] = array[i];
             array[i] = t;
+        }
+    }
+}
+
+bool ip_in_networks(uint32_t ip, ip_mask_pair_t* networks)
+{
+    for (int i = 0; ; ++i) {
+        ip_mask_pair_t* network = &networks[i];
+
+        if (!network->ip && !network->mask) {
+            break;
+        }
+
+        uint32_t start = network->ip & network->mask;
+        uint32_t end = start | ~network->mask;
+
+        if (ip >= start && ip <= end) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool ip_in_countries(uint32_t ip, geo_country_t* countries)
+{
+    return geo_check_allowed_countries(geo, ip, countries);
+}
+
+void get_ip_access_from_cdb_tail(const char* buf, unsigned int remaining,
+                                 ip_mask_pair_t** allowed_ips, geo_country_t** allowed_countries)
+{
+    unsigned int read = 0;
+    unsigned int flags = (unsigned int) buf[read++];
+    --remaining;
+
+    if (flags & USER_FLAG_IP_CHECK_ENABLED) {
+        unsigned char list_len = (unsigned char) (!remaining ?  0 : buf[read++]);
+        remaining -= 1 + sizeof(ip_mask_pair_t) * list_len;
+
+        if (list_len) {
+            ip_mask_pair_t* pairs = calloc(list_len + 1, sizeof(ip_mask_pair_t));
+            for (unsigned int i = 0; i < list_len; ++i) {
+                pairs[i] = *((ip_mask_pair_t*) &buf[read]);
+                read += sizeof(ip_mask_pair_t);
+            }
+
+            *allowed_ips = pairs;
+        }
+    }
+
+    if (flags & USER_FLAG_COUNTRY_CHECK_ENABLED) {
+        unsigned char list_len = (unsigned char) (!remaining ?  0 : buf[read++]);
+        remaining -= 1 + sizeof(ip_mask_pair_t) * list_len;
+
+        if (list_len)  {
+            geo_country_t* countries = calloc(list_len + 1, sizeof(geo_country_t));
+            for (unsigned int i = 0; i < list_len; ++i) {
+                countries[i] = *((geo_country_t*) &buf[read]);
+                read += sizeof(geo_country_t);
+            }
+
+            *allowed_countries = countries;
         }
     }
 }
