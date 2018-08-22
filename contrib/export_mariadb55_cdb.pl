@@ -14,8 +14,8 @@ my $cdb_file_final="/etc/conf/maria55.cdb";
 
 # format is host:port;user;password
 my @servers=(
-	'mariadb55-1:3306;root;engel123chen5',
-	'mariadb55-2:3306;root;engel123chen5',
+	'mariadb55-1:3306;root;randompwd',
+	'mariadb55-2:3306;root;randompwd',
 );
 
 umask 0077;
