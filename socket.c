@@ -1,7 +1,5 @@
 #include "rum.h"
 
-extern bufpool_t *pool;
-
 extern struct destination *first_destination;
 extern char *mysql_cdb_file;
 extern char *postgresql_cdb_file;

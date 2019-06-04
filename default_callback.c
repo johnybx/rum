@@ -1,14 +1,10 @@
 #include "rum.h"
 
-extern bufpool_t *pool;
-
 void
 alloc_cb (uv_handle_t * handle, size_t size, uv_buf_t * buf)
 {
-    int len = size;             /* Requested buffer size */
-    void *ptr = bufpool_acquire (pool, &len);
-    *buf = uv_buf_init (ptr, len);
-
+    buf->base = malloc (size);
+    buf->len = size;
 }
 
 void
@@ -57,7 +53,7 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
             if (r) {
                 logmsg ("%s: uv_write() failed: %s\n", __FUNCTION__,
                         uv_strerror (r));
-                bufpool_release (buf->base);
+                free (buf->base);
                 free (sndbuf);
                 free (req);
 
@@ -85,7 +81,7 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
             if (uv_shutdown (shutdown, stream, on_shutdown)) {
                 free (shutdown);
             }
-        }                       /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release bufpool} */
+        }                       /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release buf->base} */
     } else {
         /* remote stream doesn't exist, free self */
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
@@ -96,7 +92,7 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
 
     }
 
-    bufpool_release (buf->base);
+    free (buf->base);
 }
 
 /* uv_shutdown() callback:
@@ -252,7 +248,7 @@ on_write (uv_write_t * req, int status)
         conn_data->remote_read_stopped = 0;
     }
 
-    bufpool_release (buf->base);
+    free (buf->base);
     free (buf);
     free (req);
 }

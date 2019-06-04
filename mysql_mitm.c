@@ -4,7 +4,6 @@
 #include "mysql_password/mysql_com.h"
 #include "mysql_password/sha1.h"
 
-extern bufpool_t *pool;
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern struct destination *first_destination;
@@ -301,8 +300,7 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
         uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
         uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-        int newlen = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1;
-        newbuf->base = bufpool_acquire (pool, &newlen);
+        newbuf->base = malloc (buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
 
         memcpy (newbuf->base, buf,
                 buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
@@ -413,8 +411,7 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
 
     uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
     uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-    int newlen = conn_data->mitm->client_auth_packet_len;
-    newbuf->base = bufpool_acquire (pool, &newlen);
+    newbuf->base = malloc (conn_data->mitm->client_auth_packet_len);
 
     memcpy (newbuf->base, conn_data->mitm->client_auth_packet,
             conn_data->mitm->client_auth_packet_len);
@@ -425,7 +422,7 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
         if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
             free (shutdown);
         }
-        bufpool_release (newbuf->base);
+        free (newbuf->base);
     }
 
     free_mitm (conn_data->mitm);

@@ -55,32 +55,6 @@
 #define MODE_FAILOVER_RR 2      /* -r tcp:...,tcp:... */
 #define MODE_FAILOVER_R 3       /* -R tcp:...,tcp:... */
 
-/* we keep maximum of 32 pre-allocated buffers of 8192b size */
-#define BUFPOOL_CAPACITY 16
-#define BUF_SIZE 8192
-
-typedef struct bufpool_s bufpool_t;
-
-struct bufpool_s
-{
-    void *first;
-    int used;
-    int available;
-    int alloc_size;
-};
-
-#define bufbase(ptr) ((bufbase_t *)((char *)(ptr) - sizeof(bufbase_t)))
-#define buflen(ptr) (bufbase(ptr)->len)
-
-typedef struct bufbase_s bufbase_t;
-
-struct bufbase_s
-{
-    bufpool_t *pool;
-    void *next;
-    int len;
-};
-
 struct listener
 {
     uv_stream_t *stream;        /* listening stream */
@@ -201,6 +175,7 @@ in_addr_t resolv_host_to_ip(char *host);
 
 /* default_callback.c */
 
+void alloc_cb (uv_handle_t * handle, size_t size, uv_buf_t * buf);
 void on_write (uv_write_t * req, int status);
 void on_write_then_close (uv_write_t * req, int status);
 void on_write_free (uv_write_t * req, int status);
@@ -258,19 +233,3 @@ void on_connect_timeout (uv_timer_t * timer);
 void on_write (uv_write_t * req, int status);
 void on_write_free (uv_write_t * req, int status);
 void on_write_nofree (uv_write_t * req, int status);
-
-/* bufpool.c */
-void *bufpool_dummy ();
-void *bufpool_grow (bufpool_t * pool);
-void bufpool_enqueue (bufpool_t * pool, void *ptr);
-void *bufpool_dequeue (bufpool_t * pool);
-void bufpool_init (bufpool_t * pool, int size);
-void bufpool_done (bufpool_t * pool);
-void alloc_cb (uv_handle_t * handle, size_t size, uv_buf_t * buf);
-void *bufpool_acquire (bufpool_t * pool, int *len);
-void *bufpool_alloc (bufpool_t * pool, int len);
-void bufpool_done (bufpool_t * pool);
-void bufpool_release (void *ptr);
-void bufpool_print_stats (uv_timer_t * handle);
-
-

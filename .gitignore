@@ -6,3 +6,6 @@ cmake-build*/
 *~
 *.bak
 *.orig
+*.o
+rum
+cdb/

@@ -59,7 +59,7 @@ mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
                 free (shutdown);
             }
         }
-        /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release bufpool} */
+        /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release buf->base} */
     } else {
         /* remote stream doesn't exist, free self */
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
@@ -68,5 +68,5 @@ mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
         }
     }
 
-    bufpool_release (buf->base);
+    free (buf->base);
 }

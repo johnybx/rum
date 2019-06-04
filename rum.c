@@ -4,8 +4,6 @@
 struct listener *first_listener;
 struct destination *first_destination = NULL;
 
-bufpool_t *pool;
-
 extern char *mysql_cdb_file;
 extern char *postgresql_cdb_file;
 char logstring[512];
@@ -66,18 +64,6 @@ main (int ac, char *av[])
             strcat (logstring, " ");
         }
     }
-
-    pool = malloc (sizeof (*pool));
-
-    bufpool_init (pool, BUF_SIZE);
-
-/*
-    uv_timer_t *handle;
-    handle = malloc (sizeof(uv_timer_t));
-    uv_timer_init(uv_default_loop(),handle);
-    uv_timer_start(handle, bufpool_print_stats, 1000, 1000);
-*/
-
 
     sigint = malloc (sizeof (uv_signal_t));
     sigterm = malloc (sizeof (uv_signal_t));
@@ -315,9 +301,6 @@ main (int ac, char *av[])
     uv_run (uv_default_loop (), UV_RUN_DEFAULT);
 
     /* SIGINT || SIGTERM received, clean up */
-    bufpool_done (pool);
-    free (pool);
-
     if (mysql_cdb_file) {
         free (mysql_cdb_file);
     }

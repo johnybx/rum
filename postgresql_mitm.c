@@ -1,6 +1,5 @@
 #include "rum.h"
 
-extern bufpool_t *pool;
 extern struct destination *first_destination;
 extern int loglogins;
 
