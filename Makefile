@@ -1,7 +1,7 @@
 CC=clang-4.0
 LD=clang-4.0
 
-LIBUV_DIR=libuv-1.11.0
+LIBUV_DIR=libuv-v1.29.1
 
 #LDFLAGS=-flto
 LDLIBS=-L ${LIBUV_DIR}/.libs -lrt -lcdb -lm -lpthread -ldl
