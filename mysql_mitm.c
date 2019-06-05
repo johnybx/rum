@@ -8,6 +8,7 @@ extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern struct destination *first_destination;
 extern int loglogins;
+extern SSL_CTX *ctx;
 
 /* initialize struct mitm */
 struct mitm *
@@ -172,6 +173,31 @@ handle_init_packet_from_server (struct conn_data *conn_data,
     return 0;
 }
 
+int
+enable_ssl (struct conn_data *conn_data,
+                                const uv_buf_t * uv_buf, size_t nread)
+{
+    conn_data->ssl = SSL_new(ctx);
+    SSL_set_accept_state(conn_data->ssl);
+    conn_data->ssl_read = BIO_new(BIO_s_mem());
+    conn_data->ssl_write = BIO_new(BIO_s_mem());
+    BIO_set_nbio(conn_data->ssl_read, 1);
+    BIO_set_nbio(conn_data->ssl_write, 1);
+    SSL_set_bio(conn_data->ssl, conn_data->ssl_read, conn_data->ssl_write);
+    if (nread > MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE) {
+        /* sometimes SSL data are here too, so call mysql_on_read again without MYSQL_SSL_CONN_REQUEST_PACKET */
+        int newlen = nread - (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE);
+        char *base = malloc (newlen);
+        memcpy(base, uv_buf->base + (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE), nread - (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE));
+        uv_buf_t new_uv_buf;
+        new_uv_buf.base = base;
+        new_uv_buf.len = nread - (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE);
+        mysql_on_read (conn_data->stream, new_uv_buf.len, &new_uv_buf);
+    }
+
+    return 1;
+}
+
 
 int
 handle_auth_packet_from_client (struct conn_data *conn_data,
@@ -183,6 +209,18 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
     struct conn_data *conn_data_remote;
     struct destination *destination = NULL;
     char *mysql_server = NULL, *c, *i, *userptr;
+
+    /* check for ssl flag  */
+    if (nread > MYSQL_PACKET_HEADER_SIZE + 4) {
+        if (!conn_data->ssl && check_client_side_ssl(uv_buf->base)) {
+            return enable_ssl(conn_data, uv_buf, nread);
+        }
+        if (conn_data->ssl) {
+            /* TODO */
+            decrement_packet_seq(uv_buf->base);
+        }
+    }
+
 
     /* check if size ends in user[1], so user has at least 1 char */
     if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1) {

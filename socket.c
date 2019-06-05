@@ -134,6 +134,7 @@ on_outgoing_connection (uv_connect_t * connect, int status)
         /* calling it again will cause segfault */
         if (!conn_data->uv_closed) {
             uv_close ((uv_handle_t *) stream, on_close);
+            conn_data->uv_closed = 1;
         }
 
         if (mode == MODE_NORMAL) {
@@ -252,7 +253,7 @@ on_incoming_connection (uv_stream_t * server, int status)
     int r;
     uv_stream_t *client;
 
-    if (listener->type == SOCKET_TCP) {
+    if (listener->s[0] == SOCKET_TCP) {
         client = malloc (sizeof (uv_tcp_t));
         uv_tcp_init (uv_default_loop (), (uv_tcp_t *) client);
     } else {
@@ -290,6 +291,9 @@ on_incoming_connection (uv_stream_t * server, int status)
     conn_data_client->mitm = NULL;
     conn_data_client->uv_closed = 0;
     conn_data_client->remote_read_stopped = 0;
+    conn_data_client->ssl = NULL;
+    conn_data_client->ssl_read = NULL;
+    conn_data_client->ssl_write = NULL;
 
     client->data = conn_data_client;
     conn_data_client->remote = NULL;
@@ -433,6 +437,9 @@ create_server_connection (struct conn_data *conn_data_client,
     conn_data_target->connected = 0;
     conn_data_target->uv_closed = 0;
     conn_data_target->remote_read_stopped = 0;
+    conn_data_target->ssl = NULL;
+    conn_data_target->ssl_read = NULL;
+    conn_data_target->ssl_write = NULL;
     conn_data_target->destination = destination;
     conn_data_target->failover_first_dst = destination;
 
@@ -458,4 +465,76 @@ create_server_connection (struct conn_data *conn_data_client,
                     connect_timeout * 1000, 0);
 
     return conn_data_target;
+}
+
+
+/*
+ * read incoming ssl data from buf->base and replace it with unencrypted in buf->base
+ */
+size_t
+handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf)
+{
+    struct conn_data *conn_data = stream->data;
+    BIO_write(conn_data->ssl_read, buf->base, nread);
+    ssize_t readbytes = 0;
+    while (1)
+    {
+        /* check for enough space in uv_buf */
+        int pending = BIO_pending(conn_data->ssl_read);
+        if (readbytes + pending > buf->len) {
+            buf->base = realloc(buf->base, readbytes + pending);
+            buf->len = readbytes + pending;
+        }
+        size_t read = 0;
+        int rc = SSL_read_ex(conn_data->ssl, buf->base + readbytes, pending, &read);
+        readbytes += read;
+        if (rc <= 0) {
+            int error_rc = SSL_get_error(conn_data->ssl, rc);
+            if (error_rc == SSL_ERROR_WANT_READ) {
+                int flushed = flush_ssl(conn_data);
+                if (flushed == 0) {
+                    return readbytes;
+                } else if (flushed == -1) {
+                    return -1;
+                }
+            } else {
+                ERR_print_errors_cb(logmsg_ssl, "handle_ssl");
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                    free (shutdown);
+                }
+
+                return -1;
+            }
+        }
+    }
+    return readbytes;
+}
+
+int flush_ssl(struct conn_data *conn_data) {
+    int pending = BIO_pending(conn_data->ssl_write);
+    if (pending) {
+        uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+        uv_buf_t *buf = malloc (sizeof (uv_buf_t));
+        buf->base = malloc (pending);
+        buf->len = BIO_read (conn_data->ssl_write, buf->base, pending);
+        req->data = buf;
+        int r = uv_write (req, conn_data->stream, buf, 1, on_write);
+        if (r) {
+            logmsg ("%s: uv_write() failed: %s\n", __FUNCTION__,
+            uv_strerror (r));
+
+            free (buf->base);
+            free (buf);
+            free (req);
+
+            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                free (shutdown);
+            }
+            return -1;
+        }
+    }
+
+    return pending;
 }

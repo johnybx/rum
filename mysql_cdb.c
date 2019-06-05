@@ -6,6 +6,7 @@ int cdb_fd;
 
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
+extern int mysql_server_ssl;
 
 void
 init_mysql_cdb_file (char *type)
@@ -69,6 +70,10 @@ init_mysql_cdb_file (char *type)
             fprintf (stderr, "unknown mysql type: %s", type);
             exit (-1);
         }
+    }
+
+    if (mysql_server_ssl) {
+        enable_server_side_ssl();
     }
 
     if ((cdb_fd = open (mysql_cdb_file, O_RDONLY)) == -1) {
@@ -138,4 +143,59 @@ reopen_cdb (uv_timer_t* handle)
     } else {
         cdb_init (&cdb, cdb_fd);
     }
+}
+
+void
+enable_server_side_ssl()
+{
+  uint16_t server_capabilities;
+  char *ptr;
+  for (ptr = cache_mysql_init_packet + MYSQL_PACKET_HEADER_SIZE + 1; *ptr!='\0'; ptr ++);
+  ptr += 1 + 4;
+  for (ptr = ptr + 1; *ptr!='\0'; ptr ++);
+  ptr += 1;
+  memcpy (&server_capabilities, (void *)ptr, sizeof(uint16_t));
+  server_capabilities = server_capabilities | 0x800;
+  memcpy ((void *)ptr, &server_capabilities, sizeof(uint16_t));
+}
+
+int
+check_client_side_ssl(char *packet)
+{
+  uint16_t client_capabilities;
+  char *ptr;
+  ptr =  packet + MYSQL_PACKET_HEADER_SIZE;
+  memcpy (&client_capabilities, (void *)ptr, sizeof(uint16_t));
+  if ((client_capabilities & 0x800) == 0x800) {
+        return 1;
+  } else {
+        return 0;
+  }
+}
+
+int
+disable_client_side_ssl(char *packet)
+{
+  uint16_t client_capabilities;
+  char *ptr;
+  ptr =  packet + MYSQL_PACKET_HEADER_SIZE;
+  memcpy (&client_capabilities, (void *)ptr, sizeof(uint16_t));
+  if ((client_capabilities & 0x800) == 0x800) {
+        client_capabilities = client_capabilities & !0x800;
+        memcpy ((void *) ptr, &client_capabilities, sizeof(uint16_t));
+        return 1;
+  } else {
+        return 0;
+  }
+}
+
+void
+decrement_packet_seq(char *packet)
+{
+  uint8_t seqnr;
+  char *ptr;
+  ptr =  packet + MYSQL_PACKET_HEADER_SIZE - 1;
+  memcpy (&seqnr, (void *)ptr, sizeof(uint8_t));
+  seqnr--;
+  memcpy ((void *)ptr, &seqnr, sizeof(uint8_t));
 }

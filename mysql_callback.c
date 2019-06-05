@@ -25,9 +25,22 @@ mysql_on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const u
 
 
 void
-mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
+mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
 {
     struct conn_data *conn_data = (struct conn_data *) stream->data;
+
+    uv_buf_t mybuf;
+    uv_buf_t *buf = &mybuf;
+    buf->base = constbuf->base;
+    buf->len = constbuf->len;
+
+    if (conn_data->ssl && nread > 0) {
+        nread = handle_ssl(stream, nread, buf);
+        if (nread <= 0) {
+            free (buf->base);
+            return;
+        }
+    }
 
     if (conn_data->remote || (conn_data->mitm && conn_data->mitm->not_need_remote)) {
         if (nread > 0) {

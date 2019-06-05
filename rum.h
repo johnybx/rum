@@ -28,6 +28,10 @@
 
 #include "uv.h"
 
+#include <openssl/ssl.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
+
 #define MYSQL50_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x30\x2e\x39\x32\x2d\x6c\x6f\x67\x00\xbf\x96\xc2\x10\x69\x5f\x21\x23\x2a\x49\x73\x26\x00\x2c\xa2\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x60\x36\x28\x65\x44\x66\x54\x53\x22\x4c\x3b\x22\x00"
 #define MYSQL51_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x31\x2e\x36\x33\x2d\x6c\x6f\x67\x00\xc2\x0d\xca\x73\x47\x46\x65\x4b\x29\x29\x30\x57\x00\xff\xf7\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x45\x32\x6a\x42\x48\x23\x73\x3e\x76\x5c\x4b\x3f\x00"
 #define MARIADB55_INIT_PACKET "\x56\x00\x00\x00\x0a\x35\x2e\x35\x2e\x34\x35\x2d\x4d\x61\x72\x69\x61\x44\x42\x2d\x6c\x6f\x67\x00\x28\xe3\x75\x01\x24\x2e\x56\x4b\x53\x40\x28\x45\x00\xff\xf7\x3f\x02\x00\x0f\xa0\x15\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x61\x39\x39\x52\x70\x5e\x64\x5d\x27\x48\x74\x2f\x00\x6d\x79\x73\x71\x6c\x5f\x6e\x61\x74\x69\x76\x65\x5f\x70\x61\x73\x73\x77\x6f\x72\x64\x00"
@@ -46,6 +50,7 @@
 #define MYSQL_PACKET_HEADER_SIZE 4
 #define MYSQL_INIT_PACKET_MIN_SIZE 46
 #define MYSQL_AUTH_PACKET_USER_POS 32
+#define MYSQL_SSL_CONN_REQUEST_PACKET_SIZE 32
 
 #define SOCKET_TCP 't'
 #define SOCKET_UNIX 's'
@@ -118,6 +123,10 @@ struct conn_data
     struct destination *destination;
     short uv_closed;
     short remote_read_stopped;
+
+    /* ssl stuff */
+    SSL *ssl;
+    BIO *ssl_read, *ssl_write;
 };
 
 /* if we use cdb database we need to store some information from client or server and process it */
@@ -146,6 +155,7 @@ struct mitm
 /* main.c */
 void usage ();
 void logmsg (const char *fmt, ...);
+int logmsg_ssl(const char *str, size_t len, void *u);
 int get_num_fds ();
 struct destination *add_destination (char *ptr);
 void randomize_destinations (void);
@@ -165,6 +175,8 @@ uv_stream_t *create_listen_socket (char *wwtf);
 void on_incoming_connection (uv_stream_t * server, int status);
 void prepare_upstream (char *wwtf, struct destination *destination);
 void failover (struct conn_data *bev_target);
+int flush_ssl(struct conn_data *conn_data);
+size_t handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf);
 
 /* parse_arg.c */
 void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
@@ -174,17 +186,16 @@ void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
 in_addr_t resolv_host_to_ip(char *host);
 
 /* default_callback.c */
-
 void alloc_cb (uv_handle_t * handle, size_t size, uv_buf_t * buf);
 void on_write (uv_write_t * req, int status);
 void on_write_then_close (uv_write_t * req, int status);
 void on_write_free (uv_write_t * req, int status);
-void on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
-void on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
+void on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf);
+void on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf);
 
 /* mysql_callback.c */
 void mysql_on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
-void mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
+void mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf);
 
 /* postgresql_callback.c */
 void postgresql_on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread,
@@ -204,6 +215,7 @@ pg_handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * buf,
 struct mitm *init_mitm ();
 void free_mitm (struct mitm *mitm);
 char *get_scramble_from_init_packet (char *packet, size_t len);
+int enable_ssl (struct conn_data *conn_data, const uv_buf_t * uv_buf, size_t nread);
 int handle_init_packet_from_server (struct conn_data *conn_data,
                                     const uv_buf_t * buf, size_t nread);
 int handle_auth_packet_from_client (struct conn_data *conn_data,
@@ -217,6 +229,10 @@ void init_mysql_cdb_file ();
 void get_data_from_cdb (char *user, int user_len, char **mysql_server,
                         char **mysql_password);
 void reopen_cdb (uv_timer_t * handle);
+void enable_server_side_ssl();
+void decrement_packet_seq(char *packet);
+int check_client_side_ssl(char *packet);
+
 
 /* postgresql_cdb.h */
 void init_postgresql_cdb_file ();

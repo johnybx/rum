@@ -25,11 +25,23 @@ on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const uv_buf_
 }
 
 void
-on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
+on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
 {
     struct conn_data *conn_data = stream->data;
     int r;
-    uv_stream_t *remote_stream;
+    uv_buf_t mybuf;
+    uv_buf_t *buf = &mybuf;
+    buf->base = constbuf->base;
+    buf->len = constbuf->len;
+
+    /* if this connection is ssl, decrypt data from buf->base into buf->base */
+    if (conn_data->ssl && nread > 0) {
+        nread = handle_ssl(stream, nread, buf);
+        if (nread <= 0) {
+            free (buf->base);
+            return;
+        }
+    }
 
     /* if remote stream exist */
     if (conn_data->remote) {
@@ -43,31 +55,47 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
             }
 
             /* send data to remote stream */
-            uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
-            uv_buf_t *sndbuf = malloc (sizeof (uv_buf_t));
-            sndbuf->base = buf->base;
-            sndbuf->len = nread;
-            req->data = sndbuf;
-            remote_stream = conn_data->remote->stream;
-            r = uv_write (req, remote_stream, sndbuf, 1, on_write);
-            if (r) {
-                logmsg ("%s: uv_write() failed: %s\n", __FUNCTION__,
-                        uv_strerror (r));
+            if (conn_data->remote->ssl) {
+                int rc = SSL_write(conn_data->remote->ssl, buf->base, nread);
                 free (buf->base);
-                free (sndbuf);
-                free (req);
-
-                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-                if (uv_shutdown (shutdown, stream, on_shutdown)) {
-                    free (shutdown);
+                if (rc > 0) {
+                    int flushed = flush_ssl(conn_data->remote);
+                    if (flushed < 0 ) {
+                        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                        if (uv_shutdown (shutdown, stream, on_shutdown)) {
+                            free (shutdown);
+                        }
+                    }
+                } else {
+                    // TODO
                 }
 
-                return;
+            } else {
+                uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+                uv_buf_t *sndbuf = malloc (sizeof (uv_buf_t));
+                sndbuf->base = buf->base;
+                sndbuf->len = nread;
+                req->data = sndbuf;
+                r = uv_write (req, conn_data->remote->stream, sndbuf, 1, on_write);
+                if (r) {
+                    logmsg ("%s: uv_write() failed: %s\n", __FUNCTION__,
+                            uv_strerror (r));
+                    free (buf->base);
+                    free (sndbuf);
+                    free (req);
+
+                    uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                    if (uv_shutdown (shutdown, stream, on_shutdown)) {
+                        free (shutdown);
+                    }
+
+                    return;
+                }
             }
 
             /* we stop reading from input stream immediately when write_queue_size of remote stream is non-zero */
             /* there is tcp buffer so there is definitely some data, no need to buffer more data in rum */
-            if (remote_stream->write_queue_size > 0) {
+            if (conn_data->remote->stream->write_queue_size > 0) {
                 /* disable reading on input socket */
                 conn_data->remote->remote_read_stopped = 1;
                 uv_read_stop (stream);
@@ -81,7 +109,7 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
             if (uv_shutdown (shutdown, stream, on_shutdown)) {
                 free (shutdown);
             }
-        }                       /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release buf->base} */
+        }                       /* else if (nread==0) {do nothing becaause read() return EAGAIN, just release bufpool} */
     } else {
         /* remote stream doesn't exist, free self */
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
@@ -108,7 +136,7 @@ on_shutdown (uv_shutdown_t * shutdown, int status)
     /* this can happend when client close connection before server send any data */
     if (conn_data->read_timer) {
         uv_timer_stop (conn_data->read_timer);
-        uv_close ((uv_handle_t *) conn_data->read_timer, on_close_timer);
+        uv_close((uv_handle_t*) conn_data->read_timer, on_close_timer);
         conn_data->read_timer = NULL;
     }
 
@@ -134,6 +162,11 @@ on_shutdown (uv_shutdown_t * shutdown, int status)
         if (uv_shutdown (shutdown, conn_data->remote->stream, on_shutdown)) {
             free (shutdown);
         }
+    }
+
+    if (conn_data->ssl) {
+        SSL_free(conn_data->ssl);
+        conn_data->ssl = NULL;
     }
 
     if (!conn_data->uv_closed) {
@@ -174,8 +207,10 @@ on_connect_timeout (uv_timer_t * timer)
 
     /* close socket */
     /* we cannot call here uv_shutdown because it will fail (socket is not connected) */
-    conn_data->uv_closed = 1;
-    uv_close ((uv_handle_t *) conn_data->stream, on_close);
+    if (!conn_data->uv_closed) {
+        conn_data->uv_closed = 1;
+        uv_close ((uv_handle_t *) conn_data->stream, on_close);
+    }
 }
 
 void
@@ -272,3 +307,4 @@ on_write_nofree (uv_write_t * req, int status)
     free (buf);
     free (req);
 }
+

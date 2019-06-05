@@ -13,6 +13,11 @@ int connect_timeout = CONNECT_TIMEOUT;
 int read_timeout = READ_TIMEOUT;
 int daemonize = 0;
 int loglogins = 0;
+int mysql_server_ssl = 0;
+SSL_CTX *ctx = NULL;
+char *ssl_cert = NULL;
+char *ssl_key = NULL;
+
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -103,6 +108,9 @@ main (int ac, char *av[])
         {"connect-timeout", required_argument, 0, 0},
         {"pidfile", required_argument, 0, 'p'},
         {"loglogins", no_argument, 0, 'L'},
+        {"mysql-server-ssl", no_argument, 0, 0},
+        {"ssl-cert", required_argument, 0, 0},
+        {"ssl-key", required_argument, 0, 0},
         {0, 0, 0, 0}
     };
 
@@ -117,6 +125,12 @@ main (int ac, char *av[])
             if (strcmp (long_options[option_index].name, "connect-timeout") ==
                 0)
                 connect_timeout = atoi (optarg);
+            if (strcmp (long_options[option_index].name, "mysql-server-ssl") == 0)
+                mysql_server_ssl = 1;
+            if (strcmp (long_options[option_index].name, "ssl-cert") == 0)
+                ssl_cert = strdup(optarg);
+            if (strcmp (long_options[option_index].name, "ssl-key") == 0)
+                ssl_key = strdup(optarg);
 
             break;
 
@@ -229,6 +243,30 @@ main (int ac, char *av[])
         init_postgresql_cdb_file (mysqltype);
     }
 
+    SSL_library_init();
+    SSL_load_error_strings();
+    OpenSSL_add_ssl_algorithms();
+
+    ctx = SSL_CTX_new(TLS_server_method());
+    const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE;
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+    /* tls1.3 not working with mariadb-client-core-10.3, not sure why, force tls1.2 */
+    SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
+    SSL_CTX_set_options(ctx, flags);
+    SSL_CTX_set_cipher_list(ctx, "EECDH+AESGCM:EDH+AESGCM");
+    SSL_CTX_set_ecdh_auto(ctx, 1);
+    if (ssl_cert) {
+        if (SSL_CTX_use_certificate_file(ctx, ssl_cert, SSL_FILETYPE_PEM) <= 0) {
+            ERR_print_errors_fp(stderr);
+            exit(EXIT_FAILURE);
+        }
+    }
+    if (ssl_key) {
+        if (SSL_CTX_use_PrivateKey_file(ctx, ssl_key, SSL_FILETYPE_PEM) <= 0) {
+            ERR_print_errors_fp(stderr);
+            exit(EXIT_FAILURE);
+        }
+    }
 
     if (daemonize) {
         if (logfile) {
@@ -330,8 +368,20 @@ void
 usage ()
 {
     printf
-        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\n");
+        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\t"
+         "--mysql-server-ssl - when using cdb (-M) allow mysql clients to connect with ssl (--ssl-cert/key required)"
+         "\n\t"
+         "--ssl-cert crt - path to cert file"
+         "\n\t"
+         "--ssl-key key - path to key file"
+         "\n\n");
     exit (-1);
+}
+
+int logmsg_ssl(const char *str, size_t len, void *u)
+{
+    logmsg("%u %s", u, str);
+    return 1;
 }
 
 void
