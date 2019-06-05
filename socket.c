@@ -8,6 +8,7 @@ extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern char *cache_mysql_init_packet_scramble;
 extern int mode;
+extern SSL_CTX *ctx;
 
 int logfd;
 
@@ -467,6 +468,44 @@ create_server_connection (struct conn_data *conn_data_client,
     return conn_data_target;
 }
 
+int
+enable_ssl (struct conn_data *conn_data)
+{
+    conn_data->ssl = SSL_new(ctx);
+    SSL_set_accept_state(conn_data->ssl);
+    conn_data->ssl_read = BIO_new(BIO_s_mem());
+    conn_data->ssl_write = BIO_new(BIO_s_mem());
+    BIO_set_nbio(conn_data->ssl_read, 1);
+    BIO_set_nbio(conn_data->ssl_write, 1);
+    SSL_set_bio(conn_data->ssl, conn_data->ssl_read, conn_data->ssl_write);
+
+    return 1;
+}
+
+int
+enable_ssl_mysql (struct conn_data *conn_data,
+                                const uv_buf_t * uv_buf, size_t nread)
+{
+    conn_data->ssl = SSL_new(ctx);
+    SSL_set_accept_state(conn_data->ssl);
+    conn_data->ssl_read = BIO_new(BIO_s_mem());
+    conn_data->ssl_write = BIO_new(BIO_s_mem());
+    BIO_set_nbio(conn_data->ssl_read, 1);
+    BIO_set_nbio(conn_data->ssl_write, 1);
+    SSL_set_bio(conn_data->ssl, conn_data->ssl_read, conn_data->ssl_write);
+    if (nread > MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE) {
+        /* sometimes SSL data are here too, so call mysql_on_read again without MYSQL_SSL_CONN_REQUEST_PACKET */
+        int newlen = nread - (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE);
+        char *base = malloc (newlen);
+        memcpy(base, uv_buf->base + (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE), nread - (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE));
+        uv_buf_t new_uv_buf;
+        new_uv_buf.base = base;
+        new_uv_buf.len = nread - (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE);
+        mysql_on_read (conn_data->stream, new_uv_buf.len, &new_uv_buf);
+    }
+
+    return 1;
+}
 
 /*
  * read incoming ssl data from buf->base and replace it with unencrypted in buf->base

@@ -177,6 +177,8 @@ void prepare_upstream (char *wwtf, struct destination *destination);
 void failover (struct conn_data *bev_target);
 int flush_ssl(struct conn_data *conn_data);
 size_t handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf);
+int enable_ssl (struct conn_data *conn_data);
+int enable_ssl_mysql (struct conn_data *conn_data, const uv_buf_t * uv_buf, size_t nread);
 
 /* parse_arg.c */
 void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
@@ -202,7 +204,7 @@ void postgresql_on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nrea
                          const uv_buf_t * buf);
 
 void postgresql_on_read (uv_stream_t * stream, ssize_t nread,
-                         const uv_buf_t * buf);
+                         const uv_buf_t * constbuf);
 
 /* postgresql_mitm.c */
 int pg_handle_init_packet_from_client (struct conn_data *conn_data,
@@ -215,7 +217,6 @@ pg_handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * buf,
 struct mitm *init_mitm ();
 void free_mitm (struct mitm *mitm);
 char *get_scramble_from_init_packet (char *packet, size_t len);
-int enable_ssl (struct conn_data *conn_data, const uv_buf_t * uv_buf, size_t nread);
 int handle_init_packet_from_server (struct conn_data *conn_data,
                                     const uv_buf_t * buf, size_t nread);
 int handle_auth_packet_from_client (struct conn_data *conn_data,

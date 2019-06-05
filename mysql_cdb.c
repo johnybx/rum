@@ -6,7 +6,7 @@ int cdb_fd;
 
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
-extern int mysql_server_ssl;
+extern int server_ssl;
 
 void
 init_mysql_cdb_file (char *type)
@@ -72,7 +72,7 @@ init_mysql_cdb_file (char *type)
         }
     }
 
-    if (mysql_server_ssl) {
+    if (server_ssl) {
         enable_server_side_ssl();
     }
 

@@ -2,6 +2,7 @@
 
 extern struct destination *first_destination;
 extern int loglogins;
+extern int server_ssl;
 
 int
 pg_handle_init_packet_from_client (struct conn_data *conn_data,
@@ -32,21 +33,37 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
             b = (int *) (ptr + sizeof (int));
 
             if (ntohl (*a) == 8 && ntohl (*b) == 80877103) {
-                /* send client that we dont support SSL */
-                uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
-                uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-                newbuf->base = malloc (1);
-                newbuf->base[0] = 'N';
-                newbuf->len = 1;
-                req->data = newbuf;
-                if (uv_write
-                    (req, conn_data->stream, newbuf, 1, on_write_free)) {
-                    uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-                    if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-                        free (shutdown);
+                if (!server_ssl) {
+                    /* send client that we dont support SSL */
+                    uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+                    uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+                    newbuf->base = malloc (1);
+                    newbuf->base[0] = 'N';
+                    newbuf->len = 1;
+                    req->data = newbuf;
+                    if (uv_write
+                        (req, conn_data->stream, newbuf, 1, on_write_free)) {
+                        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                            free (shutdown);
+                        }
                     }
+                } else {
+                    uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+                    uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+                    newbuf->base = malloc (1);
+                    newbuf->base[0] = 'S';
+                    newbuf->len = 1;
+                    req->data = newbuf;
+                    if (uv_write
+                        (req, conn_data->stream, newbuf, 1, on_write_free)) {
+                        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                            free (shutdown);
+                        }
+                    }
+                    return enable_ssl(conn_data);
                 }
-
                 return 1;
             }
         }
