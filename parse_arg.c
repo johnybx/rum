@@ -9,11 +9,17 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
            char **host_str, char **port_str, char **sockfile_str,
            int unlink_socket)
 {
-    if (strstr (arg, "tcp:") == arg) {
+    if (strstr (arg, "tcp:") == arg || strstr (arg, "ssl:") == arg) {
         char *tmp;
         int resolv = 0;
 
-        *type = SOCKET_TCP;
+        if (strstr (arg, "tcp:") == arg) {
+            *type = SOCKET_TCP;
+        } else {
+            *type = SOCKET_SSL;
+            /* overwrite ssl to Ssl */
+            arg[0] = 'S';
+        }
 
         arg += 4;
         tmp = strstr (arg, ":");
@@ -63,7 +69,6 @@ parse_arg (char *arg, char *type, struct sockaddr_in *sin,
         if (unlink_socket) {
             if (!access (*sockfile_str, F_OK)) {
                 if (unlink (*sockfile_str)) {
-                    /* TODO prerobit na warning */
                     perror ("unlink");
                     _exit (-1);
                 }

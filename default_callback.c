@@ -57,8 +57,8 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
             /* send data to remote stream */
             if (conn_data->remote->ssl) {
                 int rc = SSL_write(conn_data->remote->ssl, buf->base, nread);
-                free (buf->base);
                 if (rc > 0) {
+                    free (buf->base);
                     int flushed = flush_ssl(conn_data->remote);
                     if (flushed < 0 ) {
                         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
@@ -67,9 +67,33 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
                         }
                     }
                 } else {
-                    // TODO
-                }
+                    int error_rc = SSL_get_error(conn_data->ssl, rc);
+                    /* SSL_write failed because it need read,
+                     * lets store unencrypted data to conn_data->pending linked list
+                     * and SSL_write it in next on_read callback in flush_ssl() */
+                    if (error_rc == SSL_ERROR_WANT_READ) {
+                        struct pending *p;
+                        if (!conn_data->pending) {
+                            conn_data->pending = malloc (sizeof (struct pending));
+                            p = conn_data->pending;
+                        } else {
+                            for (p = conn_data->pending; p->next; p = p->next) {
+                                p->next=malloc (sizeof (struct pending));
+                                p = p->next;
+                            }
+                        }
 
+                        p->next = NULL;
+                        p->buf = buf;
+                    } else {
+                        free (buf->base);
+                        ERR_print_errors_cb(logmsg_ssl, "handle_ssl");
+                        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                        if (uv_shutdown (shutdown, stream, on_shutdown)) {
+                            free (shutdown);
+                        }
+                    }
+                }
             } else {
                 uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
                 uv_buf_t *sndbuf = malloc (sizeof (uv_buf_t));
@@ -167,6 +191,14 @@ on_shutdown (uv_shutdown_t * shutdown, int status)
     if (conn_data->ssl) {
         SSL_free(conn_data->ssl);
         conn_data->ssl = NULL;
+    }
+
+    struct pending *p;
+    for (p = conn_data->pending; p; p = conn_data->pending) {
+       conn_data->pending = p->next;
+       free (p->buf->base);
+       free (p->buf);
+       free (p);
     }
 
     if (!conn_data->uv_closed) {

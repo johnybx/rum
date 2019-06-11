@@ -54,6 +54,7 @@
 
 #define SOCKET_TCP 't'
 #define SOCKET_UNIX 's'
+#define SOCKET_SSL 'S'
 
 #define MODE_NORMAL 0           /* -d tcp:... */
 #define MODE_FAILOVER 1         /* -f tcp:...,tcp:... */
@@ -73,6 +74,8 @@ struct listener
     char type;
 #define LISTENER_DEFAULT 1
 #define LISTENER_STATS 2
+
+    char sockettype;
 
     struct listener *next;
 };
@@ -127,6 +130,13 @@ struct conn_data
     /* ssl stuff */
     SSL *ssl;
     BIO *ssl_read, *ssl_write;
+    struct pending *pending;
+};
+
+struct pending
+{
+    uv_buf_t *buf;
+    struct pending *next;
 };
 
 /* if we use cdb database we need to store some information from client or server and process it */
@@ -171,14 +181,16 @@ struct conn_data *create_server_connection (struct conn_data *conn_data_client,
                                             struct destination *destination,
                                             struct listener *listener);
 void alloc_buffer (uv_handle_t * handle, size_t size, uv_buf_t * buf);
-uv_stream_t *create_listen_socket (char *wwtf);
+uv_stream_t *create_listen_socket (char *wwtf, char *sockettype);
 void on_incoming_connection (uv_stream_t * server, int status);
 void prepare_upstream (char *wwtf, struct destination *destination);
 void failover (struct conn_data *bev_target);
 int flush_ssl(struct conn_data *conn_data);
 size_t handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf);
-int enable_ssl (struct conn_data *conn_data);
-int enable_ssl_mysql (struct conn_data *conn_data, const uv_buf_t * uv_buf, size_t nread);
+int enable_server_ssl (struct conn_data *conn_data);
+int enable_server_ssl_mysql (struct conn_data *conn_data, const uv_buf_t * uv_buf, size_t nread);
+int enable_client_ssl (struct conn_data *conn_data);
+int is_private_address(struct conn_data *conn_data);
 
 /* parse_arg.c */
 void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
@@ -224,15 +236,20 @@ int handle_auth_packet_from_client (struct conn_data *conn_data,
 int handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * buf,
                              size_t nread);
 char *set_random_scramble_on_init_packet (char *packet, void *p1, void *p2);
+int check_server_side_ssl_flag(char *packet, size_t len);
+void enable_server_side_ssl_flag();
+int check_client_side_ssl_flag(char *packet);
+void enable_client_side_ssl_flag(char *packet);
+void decrement_packet_seq(char *packet);
+void increment_packet_seq(char *packet);
+void print_packet_seq(char *packet);
+
 
 /* mysql_cdb.h */
 void init_mysql_cdb_file ();
 void get_data_from_cdb (char *user, int user_len, char **mysql_server,
                         char **mysql_password);
 void reopen_cdb (uv_timer_t * handle);
-void enable_server_side_ssl();
-void decrement_packet_seq(char *packet);
-int check_client_side_ssl(char *packet);
 
 
 /* postgresql_cdb.h */

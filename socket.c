@@ -9,6 +9,7 @@ extern int cache_mysql_init_packet_len;
 extern char *cache_mysql_init_packet_scramble;
 extern int mode;
 extern SSL_CTX *ctx;
+extern SSL_CTX *client_ctx;
 
 int logfd;
 
@@ -20,7 +21,7 @@ extern int read_timeout;
  * arg - tcp:blah:blah alebo sock:blah
  */
 uv_stream_t *
-create_listen_socket (char *arg)
+create_listen_socket (char *arg, char *sockettype)
 {
     char *arg_copy;
     struct sockaddr *s = NULL;
@@ -41,7 +42,9 @@ create_listen_socket (char *arg)
     parse_arg (arg_copy, &type, &sin, &sun, &socklen, &port, &host_str,
                &port_str, &sockfile_str, 1);
 
-    if (type == SOCKET_TCP) {
+    *sockettype = type;
+
+    if (type == SOCKET_TCP || type == SOCKET_SSL) {
         uv_os_fd_t fd;
         s = (struct sockaddr *) &sin;
         tcp_t = malloc (sizeof (uv_tcp_t));
@@ -61,7 +64,7 @@ create_listen_socket (char *arg)
         _exit (-1);
     }
 
-    if (type == SOCKET_TCP) {
+    if (type == SOCKET_TCP || type == SOCKET_SSL) {
         r = uv_tcp_bind (tcp_t, (const struct sockaddr *) s, 0);
     } else {
         mode_t oldmask = umask(0);
@@ -77,7 +80,7 @@ create_listen_socket (char *arg)
     free (arg_copy);
 
 
-    if (type == SOCKET_TCP) {
+    if (type == SOCKET_TCP || type == SOCKET_SSL) {
         uv_tcp_nodelay ((uv_tcp_t *) tcp_t, 1);
         return (uv_stream_t *) tcp_t;
     } else {
@@ -189,38 +192,61 @@ on_outgoing_connection (uv_connect_t * connect, int status)
     /* on successfull connect */
     if (mysql_cdb_file) {
         r = uv_read_start (stream, alloc_cb, mysql_on_read_disable_read_timeout);
-
-        if (r) {
-        }
     } else if (postgresql_cdb_file) {
-        r = uv_read_start (stream, alloc_cb, on_read_disable_read_timeout);
+        /* if IP is public send ssl request
+         */
+        if (!is_private_address(conn_data)) {
+            r = uv_read_start (stream, alloc_cb, postgresql_on_read_disable_read_timeout);
+            char pgsslrequest[8];
+            char *ptr = pgsslrequest;
+            int *a, *b;
+            a = (int *) ptr;
+            b = (int *) (ptr + sizeof (int));
+            *a = htonl(8);
+            *b = htonl(80877103);
 
-        if (r) {
-        }
-        /* send server client auth packet */
-        if (conn_data->mitm && conn_data->mitm->client_auth_packet) {
             uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
             uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-            newbuf->base = conn_data->mitm->client_auth_packet;
-            newbuf->len = conn_data->mitm->client_auth_packet_len;
+            newbuf->base = pgsslrequest;
+            newbuf->len = sizeof(pgsslrequest);
             req->data = newbuf;
-            conn_data->mitm->client_auth_packet = NULL;
-            if (uv_write (req, stream, newbuf, 1, on_write_free)) {
+            conn_data->mitm->handshake = 3;
+            if (uv_write (req, stream, newbuf, 1, on_write_nofree)) {
                 logmsg ("%s: uv_write(postgresql client_auth_packet) failed",
                         __FUNCTION__);
 
-                free (newbuf->base);
                 free (newbuf);
                 free (req);
 
                 uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
                 uv_shutdown (shutdown, stream, on_shutdown);
             }
+        } else {
+            r = uv_read_start (stream, alloc_cb, on_read_disable_read_timeout);
+            /* send server client auth packet */
+            if (conn_data->mitm && conn_data->mitm->client_auth_packet) {
+                uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+                uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+                newbuf->base = conn_data->mitm->client_auth_packet;
+                newbuf->len = conn_data->mitm->client_auth_packet_len;
+                req->data = newbuf;
+                conn_data->mitm->client_auth_packet = NULL;
+                if (uv_write (req, stream, newbuf, 1, on_write_free)) {
+                    logmsg ("%s: uv_write(postgresql client_auth_packet) failed",
+                            __FUNCTION__);
 
+                    free (newbuf->base);
+                    free (newbuf);
+                    free (req);
+
+                    uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                    uv_shutdown (shutdown, stream, on_shutdown);
+                }
+            }
+
+            /* change client callback to on_read if we dont request ssl */
+            r = uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
         }
-        /* change client callback to on_read */
-        r = uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
-
     } else {
         r = uv_read_start (stream, alloc_cb, on_read_disable_read_timeout);
 
@@ -254,7 +280,7 @@ on_incoming_connection (uv_stream_t * server, int status)
     int r;
     uv_stream_t *client;
 
-    if (listener->s[0] == SOCKET_TCP) {
+    if (listener->sockettype == SOCKET_TCP || listener->sockettype == SOCKET_SSL) {
         client = malloc (sizeof (uv_tcp_t));
         uv_tcp_init (uv_default_loop (), (uv_tcp_t *) client);
     } else {
@@ -295,6 +321,7 @@ on_incoming_connection (uv_stream_t * server, int status)
     conn_data_client->ssl = NULL;
     conn_data_client->ssl_read = NULL;
     conn_data_client->ssl_write = NULL;
+    conn_data_client->pending = NULL;
 
     client->data = conn_data_client;
     conn_data_client->remote = NULL;
@@ -309,6 +336,10 @@ on_incoming_connection (uv_stream_t * server, int status)
                 conn_data_client->remote = NULL;
                 uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
                 uv_shutdown (shutdown, conn_data_client->stream, on_shutdown);
+            }
+
+            if (listener->sockettype == SOCKET_SSL) {
+                enable_server_ssl(conn_data_client);
             }
         } else if (mysql_cdb_file) {
             /* if mysql_cdb is enabled, use different callback functions */
@@ -441,6 +472,7 @@ create_server_connection (struct conn_data *conn_data_client,
     conn_data_target->ssl = NULL;
     conn_data_target->ssl_read = NULL;
     conn_data_target->ssl_write = NULL;
+    conn_data_target->pending = NULL;
     conn_data_target->destination = destination;
     conn_data_target->failover_first_dst = destination;
 
@@ -469,7 +501,30 @@ create_server_connection (struct conn_data *conn_data_client,
 }
 
 int
-enable_ssl (struct conn_data *conn_data)
+enable_client_ssl (struct conn_data *conn_data)
+{
+    conn_data->ssl = SSL_new(client_ctx);
+    SSL_set_connect_state(conn_data->ssl);
+    conn_data->ssl_read = BIO_new(BIO_s_mem());
+    conn_data->ssl_write = BIO_new(BIO_s_mem());
+    BIO_set_nbio(conn_data->ssl_read, 1);
+    BIO_set_nbio(conn_data->ssl_write, 1);
+    SSL_set_bio(conn_data->ssl, conn_data->ssl_read, conn_data->ssl_write);
+
+    int rc = SSL_do_handshake (conn_data->ssl);
+
+    if (rc <= 0) {
+        SSL_get_error(conn_data->ssl, rc);
+        ERR_print_errors_cb(logmsg_ssl, "handle_ssl");
+    }
+
+    flush_ssl(conn_data);
+
+    return 1;
+}
+
+int
+enable_server_ssl (struct conn_data *conn_data)
 {
     conn_data->ssl = SSL_new(ctx);
     SSL_set_accept_state(conn_data->ssl);
@@ -483,7 +538,7 @@ enable_ssl (struct conn_data *conn_data)
 }
 
 int
-enable_ssl_mysql (struct conn_data *conn_data,
+enable_server_ssl_mysql (struct conn_data *conn_data,
                                 const uv_buf_t * uv_buf, size_t nread)
 {
     conn_data->ssl = SSL_new(ctx);
@@ -551,6 +606,22 @@ handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf)
 }
 
 int flush_ssl(struct conn_data *conn_data) {
+    struct pending *p = conn_data->pending;
+    /* try to write pending unencrypted data to bio */
+    for (p = conn_data->pending; p; p = conn_data->pending) {
+        int rc = SSL_write(conn_data->ssl, p->buf->base, p->buf->len);
+        if (rc > 0) {
+            conn_data->pending = p->next;
+            free (p->buf->base);
+            free (p->buf);
+            free (p);
+        } else {
+            /* TODO check here for ssl_error ? */
+            break;
+        }
+    }
+
+    /* try to write pending encrypted data to socket */
     int pending = BIO_pending(conn_data->ssl_write);
     if (pending) {
         uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
@@ -576,4 +647,30 @@ int flush_ssl(struct conn_data *conn_data) {
     }
 
     return pending;
+}
+
+/* check if ip address of remote is from private space */
+int is_private_address(struct conn_data *conn_data) {
+    struct sockaddr_storage sa;
+    int sa_size = sizeof (struct sockaddr_storage);
+    char ip[INET6_ADDRSTRLEN];
+    uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa, &sa_size);
+    switch(sa.ss_family) {
+        case AF_INET: {
+            struct sockaddr_in *addr_in = (struct sockaddr_in *)&sa;
+            inet_ntop(AF_INET, &(addr_in->sin_addr), (char *) &ip, INET_ADDRSTRLEN);
+            if (strstr(ip, "10.") == ip || strstr(ip, "172.16.") == ip || strstr(ip, "192.168.0") == ip) {
+                return 1;
+            } else {
+                return 0;
+            }
+            break;
+        }
+        case AF_INET6: {
+            /* TODO */
+            return 0;
+        }
+    }
+
+    return 0;
 }

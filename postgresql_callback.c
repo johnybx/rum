@@ -49,6 +49,67 @@ postgresql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constb
             if (conn_data->type == CONN_CLIENT) {
                 /* first data from client */
                 pg_handle_init_packet_from_client (conn_data, buf, nread);
+            } else if (conn_data->type == CONN_TARGET) {
+                if (conn_data->mitm && conn_data->mitm->handshake == 3) {
+                    /* sslrequest reply from destination server */
+                    if (nread != 1) {
+                        logmsg ("%s: sslrequest reply should have 1 byte, but has %d",
+                                __FUNCTION__, nread);
+                        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                        if (uv_shutdown (shutdown, stream, on_shutdown)) {
+                            free (shutdown);
+                        }
+                    } else {
+                        if (buf->base[0] == 'S') {
+                            printf("server supoprt ssl\n");
+                            /* enable SSL */
+                            enable_client_ssl(conn_data);
+
+                            /* send server client auth packet over SSL */
+                            if (conn_data->ssl && conn_data->mitm && conn_data->mitm->client_auth_packet) {
+                                uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+                                newbuf->base = conn_data->mitm->client_auth_packet;
+                                newbuf->len = conn_data->mitm->client_auth_packet_len;
+
+                                conn_data->pending = malloc (sizeof (struct pending));
+                                conn_data->pending->next = NULL;
+                                conn_data->pending->buf = newbuf;
+
+                                conn_data->mitm->client_auth_packet = NULL;
+                            }
+
+                            /* change callbacks to on_read */
+                            uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
+                            uv_read_start (conn_data->stream, alloc_cb, on_read);
+                        } else {
+                            printf("server dont supoprt ssl\n");
+                            /* server not support ssl */
+                            /* send server client auth packet */
+                            if (conn_data->mitm && conn_data->mitm->client_auth_packet) {
+                                uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+                                uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+                                newbuf->base = conn_data->mitm->client_auth_packet;
+                                newbuf->len = conn_data->mitm->client_auth_packet_len;
+                                req->data = newbuf;
+                                conn_data->mitm->client_auth_packet = NULL;
+                                if (uv_write (req, stream, newbuf, 1, on_write_free)) {
+                                    logmsg ("%s: uv_write(postgresql client_auth_packet) failed",
+                                            __FUNCTION__);
+
+                                    free (newbuf->base);
+                                    free (newbuf);
+                                    free (req);
+
+                                    uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                                    uv_shutdown (shutdown, stream, on_shutdown);
+                                }
+
+                                uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
+                                uv_read_start (conn_data->stream, alloc_cb, on_read);
+                            }
+                        }
+                    }
+                }
             }
         } else if (nread < 0) {
             uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));

@@ -15,6 +15,7 @@ int daemonize = 0;
 int loglogins = 0;
 int server_ssl = 0;
 SSL_CTX *ctx = NULL;
+SSL_CTX *client_ctx = NULL;
 char *ssl_cert = NULL;
 char *ssl_key = NULL;
 
@@ -247,11 +248,13 @@ main (int ac, char *av[])
     SSL_load_error_strings();
     OpenSSL_add_ssl_algorithms();
 
+    client_ctx = SSL_CTX_new(TLS_client_method());
+
     ctx = SSL_CTX_new(TLS_server_method());
     const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE;
     SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
     /* tls1.3 not working with mariadb-client-core-10.3, not sure why, force tls1.2 */
-    SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+    SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
     SSL_CTX_set_options(ctx, flags);
     SSL_CTX_set_cipher_list(ctx, "EECDH+AESGCM:EDH+AESGCM");
     SSL_CTX_set_ecdh_auto(ctx, 1);
@@ -295,7 +298,7 @@ main (int ac, char *av[])
     /* add all listen (-s -m) ports to event_base, if someone connect: accept_connect is executed with struct listener argument */
     for (listener = first_listener; listener; listener = listener->next) {
         for (i = 0, ok = 0; i < 10; i++) {
-            listener->stream = create_listen_socket (listener->s);
+            listener->stream = create_listen_socket (listener->s, &listener->sockettype);
             listener->stream->data = listener;
             int r =
                 uv_listen ((uv_stream_t *) listener->stream, -1,
@@ -358,6 +361,7 @@ main (int ac, char *av[])
     }
 
     SSL_CTX_free(ctx);
+    SSL_CTX_free(client_ctx);
 
     free (sigint);
     free (sigterm);
@@ -370,8 +374,8 @@ void
 usage ()
 {
     printf
-        ("\n./rum -s tcp:host:port [-s tcp:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\t"
-         "--server-ssl - when using cdb (-M) allow mysql/postgresql clients to connect with ssl (--ssl-cert/key required)"
+        ("\n./rum -s [tcp|ssl]:host:port [-s [tcp|ssl]:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\t"
+         "--server-ssl - when using cdb (-M|-P) allow mysql/postgresql clients to connect with ssl (--ssl-cert/key required)"
          "\n\t"
          "--ssl-cert crt - path to cert file"
          "\n\t"

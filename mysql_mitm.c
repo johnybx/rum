@@ -99,7 +99,7 @@ get_scramble_from_init_packet (char *packet, size_t len)
 
     p = packet + MYSQL_PACKET_HEADER_SIZE + 1;
 
-    // TODO: buffer overflow
+    // TODO buffer overflow, i am lazy to fix it, its handling first packet from trusted servers
     while (*p != '\0')
         p++;
     p += 1 + 4;
@@ -145,7 +145,6 @@ set_random_scramble_on_init_packet (char *packet, void *p1, void *p2)
     return scramble;
 }
 
-
 int
 handle_init_packet_from_server (struct conn_data *conn_data,
                                 const uv_buf_t * uv_buf, size_t nread)
@@ -185,11 +184,12 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
     /* check for ssl flag  */
     if (nread > MYSQL_PACKET_HEADER_SIZE + 4) {
-        if (!conn_data->ssl && check_client_side_ssl(uv_buf->base)) {
-            return enable_ssl_mysql(conn_data, uv_buf, nread);
+        if (!conn_data->ssl && check_client_side_ssl_flag(uv_buf->base)) {
+            /* first call of handle_auth_packet_from_client */
+            return enable_server_ssl_mysql(conn_data, uv_buf, nread);
         }
         if (conn_data->ssl) {
-            /* TODO */
+            /* second call of handle_auth_packet_from_client */
             decrement_packet_seq(uv_buf->base);
         }
     }
@@ -309,20 +309,25 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
                       "Access denied, unknown user '%s'", user);
         buf[0] = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 5;
 
-        uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
-        uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-        newbuf->base = malloc (buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
+        if (conn_data->ssl) {
+            SSL_write(conn_data->ssl, buf, buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
+            flush_ssl(conn_data);
+        } else {
+            uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+            uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+            newbuf->base = malloc (buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
 
-        memcpy (newbuf->base, buf,
-                buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
-        newbuf->len = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1;
-        req->data = newbuf;
-        if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
-            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-                free (shutdown);
+            memcpy (newbuf->base, buf,
+                    buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
+            newbuf->len = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1;
+            req->data = newbuf;
+            if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                    free (shutdown);
+                }
+                return 1;
             }
-            return 1;
         }
 
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
@@ -400,6 +405,46 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
         return 1;
     }
 
+    /* if server has support for SSL and has public IP enable SSL for connection
+     * by sending SSLRequest packet and starting SSL
+     */
+    if (!conn_data->ssl && !is_private_address(conn_data) && check_server_side_ssl_flag(uv_buf->base, nread)) {
+        if (conn_data->mitm->client_auth_packet_len < (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE)) {
+            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                free (shutdown);
+            }
+            return 0;
+        }
+
+        /* prepare SSLRequest */
+        char *request = malloc (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE);
+        memset (request, 0, MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE);
+        uint32_t size = 32;
+        memcpy(request, &size, 3);
+        uint8_t seq = 1;
+        memcpy(request + MYSQL_PACKET_HEADER_SIZE - 1, &seq, sizeof(uint8_t));
+
+        /* copy flags & some stuff from client auth packet */
+        memcpy (request + MYSQL_PACKET_HEADER_SIZE, conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE, 9);
+        /* enable ssl flag in case client is not connected via ssl */
+        enable_client_side_ssl_flag(request);
+
+        uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+        uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+        newbuf->base = request;
+        newbuf->len = MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE;
+        req->data = newbuf;
+        if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
+            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                free (shutdown);
+            }
+            return 1;
+        }
+
+        enable_client_ssl(conn_data);
+    }
 
     if (conn_data->mitm->hash_stage1) {
         conn_data->mitm->scramble2 =
@@ -420,20 +465,32 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
                                    conn_data->mitm->hash_stage1);
     }
 
-    uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
     uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
     newbuf->base = malloc (conn_data->mitm->client_auth_packet_len);
 
     memcpy (newbuf->base, conn_data->mitm->client_auth_packet,
             conn_data->mitm->client_auth_packet_len);
     newbuf->len = conn_data->mitm->client_auth_packet_len;
-    req->data = newbuf;
-    if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
-        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-            free (shutdown);
+
+    if (conn_data->ssl) {
+        /* cannot use SSL_write here, it will fail because SSL handshake was not yet made */
+        /* save data to conn_data->pending and then it will be writed in default_callback */
+        increment_packet_seq(newbuf->base);
+        conn_data->pending = malloc (sizeof (struct pending));
+        conn_data->pending->next = NULL;
+        conn_data->pending->buf = newbuf;
+    } else {
+        uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+        req->data = newbuf;
+        if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
+            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                free (shutdown);
+            }
+            free (newbuf->base);
+            free (newbuf);
+            free (req);
         }
-        free (newbuf->base);
     }
 
     free_mitm (conn_data->mitm);
@@ -457,4 +514,115 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
     }
 
     return 1;
+}
+
+void
+enable_server_side_ssl_flag()
+{
+    uint16_t server_capabilities;
+    char *ptr;
+    for (ptr = cache_mysql_init_packet + MYSQL_PACKET_HEADER_SIZE + 1; *ptr!='\0'; ptr ++);
+    ptr += 1 + 4;
+    for (ptr = ptr + 1; *ptr!='\0'; ptr ++);
+    ptr += 1;
+    memcpy (&server_capabilities, (void *)ptr, sizeof(uint16_t));
+    server_capabilities = server_capabilities | 0x800;
+    memcpy ((void *)ptr, &server_capabilities, sizeof(uint16_t));
+}
+
+int
+check_server_side_ssl_flag(char *packet, size_t len)
+{
+    uint16_t server_capabilities;
+    char *ptr;
+
+    if (len < MYSQL_PACKET_HEADER_SIZE + 1) {
+        return 0;
+    }
+
+    // TODO buffer overflow, i am lazy to fix it, its handling first packet from trusted servers
+    for (ptr = packet + MYSQL_PACKET_HEADER_SIZE + 1; *ptr!='\0'; ptr ++);
+    ptr += 1 + 4;
+    for (ptr = ptr + 1; *ptr!='\0'; ptr ++);
+    ptr += 1;
+    memcpy (&server_capabilities, (void *)ptr, sizeof(uint16_t));
+    if ((server_capabilities & 0x800) == 0x800) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+
+int
+check_client_side_ssl_flag(char *packet)
+{
+    uint16_t client_capabilities;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE;
+    memcpy (&client_capabilities, (void *)ptr, sizeof(uint16_t));
+    if ((client_capabilities & 0x800) == 0x800) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+int
+disable_client_side_ssl_flag(char *packet)
+{
+    uint16_t client_capabilities;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE;
+    memcpy (&client_capabilities, (void *)ptr, sizeof(uint16_t));
+    if ((client_capabilities & 0x800) == 0x800) {
+        client_capabilities = client_capabilities & !0x800;
+        memcpy ((void *) ptr, &client_capabilities, sizeof(uint16_t));
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+void
+enable_client_side_ssl_flag(char *packet)
+{
+    uint16_t client_capabilities;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE;
+    memcpy (&client_capabilities, (void *) ptr, sizeof(uint16_t));
+    client_capabilities = client_capabilities | 0x800;
+    memcpy ((void *) ptr, &client_capabilities, sizeof(uint16_t));
+}
+
+
+void
+decrement_packet_seq(char *packet)
+{
+    uint8_t seqnr;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE - 1;
+    memcpy (&seqnr, (void *)ptr, sizeof(uint8_t));
+    seqnr--;
+    memcpy ((void *)ptr, &seqnr, sizeof(uint8_t));
+}
+
+void
+increment_packet_seq(char *packet)
+{
+    uint8_t seqnr;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE - 1;
+    memcpy (&seqnr, (void *)ptr, sizeof(uint8_t));
+    seqnr++;
+    memcpy ((void *)ptr, &seqnr, sizeof(uint8_t));
+}
+
+void
+print_packet_seq(char *packet)
+{
+    uint8_t seqnr;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE - 1;
+    memcpy (&seqnr, (void *)ptr, sizeof(uint8_t));
 }

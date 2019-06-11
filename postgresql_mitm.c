@@ -62,7 +62,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
                             free (shutdown);
                         }
                     }
-                    return enable_ssl(conn_data);
+                    return enable_server_ssl(conn_data);
                 }
                 return 1;
             }
