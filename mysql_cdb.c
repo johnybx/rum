@@ -3,15 +3,24 @@
 char *mysql_cdb_file = NULL;
 struct cdb cdb;
 int cdb_fd;
+static uv_timer_t *timer = NULL;
 
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern int server_ssl;
 
 void
+stop_mysql_cdb_file ()
+{
+    uv_timer_stop(timer);
+    free(timer);
+    timer = NULL;
+}
+
+void
 init_mysql_cdb_file (char *type)
 {
-    uv_timer_t *timer = malloc (sizeof (uv_timer_t));
+    timer = malloc (sizeof (uv_timer_t));
     uv_timer_init (uv_default_loop(), timer);
     int r = uv_timer_start (timer, reopen_cdb, CDB_RELOAD_TIME*1000, CDB_RELOAD_TIME*1000);
     if (r) {

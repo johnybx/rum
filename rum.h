@@ -246,6 +246,7 @@ void print_packet_seq(char *packet);
 
 
 /* mysql_cdb.h */
+void stop_mysql_cdb_file();
 void init_mysql_cdb_file ();
 void get_data_from_cdb (char *user, int user_len, char **mysql_server,
                         char **mysql_password);
@@ -253,6 +254,7 @@ void reopen_cdb (uv_timer_t * handle);
 
 
 /* postgresql_cdb.h */
+void stop_postgresql_cdb_file();
 void init_postgresql_cdb_file ();
 void get_data_from_cdb_postgresql (char *user, int user_len,
                                    char **postgresql_server);

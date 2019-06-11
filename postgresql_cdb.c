@@ -3,11 +3,20 @@
 char *postgresql_cdb_file = NULL;
 struct cdb postgresql_cdb;
 int postgresql_cdb_fd;
+static uv_timer_t *timer;
+
+void
+stop_postgresql_cdb_file ()
+{
+    uv_timer_stop(timer);
+    free(timer);
+    timer = NULL;
+}
 
 void
 init_postgresql_cdb_file (char *type)
 {
-    uv_timer_t *timer = malloc (sizeof (uv_timer_t));
+    timer = malloc (sizeof (uv_timer_t));
     uv_timer_init (uv_default_loop(), timer);
     int r = uv_timer_start (timer, reopen_cdb_postgresql, CDB_RELOAD_TIME*1000, CDB_RELOAD_TIME*1000);
     if (r) {
