@@ -193,8 +193,7 @@ on_outgoing_connection (uv_connect_t * connect, int status)
     if (mysql_cdb_file) {
         r = uv_read_start (stream, alloc_cb, mysql_on_read_disable_read_timeout);
     } else if (postgresql_cdb_file) {
-        /* if IP is public send ssl request
-         */
+        /* if IP is public send ssl request */
         if (!is_private_address(conn_data)) {
             r = uv_read_start (stream, alloc_cb, postgresql_on_read_disable_read_timeout);
             char pgsslrequest[8];
@@ -222,6 +221,7 @@ on_outgoing_connection (uv_connect_t * connect, int status)
                 uv_shutdown (shutdown, stream, on_shutdown);
             }
         } else {
+            /* if IP is private send client auth data */
             r = uv_read_start (stream, alloc_cb, on_read_disable_read_timeout);
             /* send server client auth packet */
             if (conn_data->mitm && conn_data->mitm->client_auth_packet) {
@@ -541,15 +541,13 @@ int
 enable_server_ssl_mysql (struct conn_data *conn_data,
                                 const uv_buf_t * uv_buf, size_t nread)
 {
-    conn_data->ssl = SSL_new(ctx);
-    SSL_set_accept_state(conn_data->ssl);
-    conn_data->ssl_read = BIO_new(BIO_s_mem());
-    conn_data->ssl_write = BIO_new(BIO_s_mem());
-    BIO_set_nbio(conn_data->ssl_read, 1);
-    BIO_set_nbio(conn_data->ssl_write, 1);
-    SSL_set_bio(conn_data->ssl, conn_data->ssl_read, conn_data->ssl_write);
+
+    enable_server_ssl(conn_data);
+
+    /* sometimes server receive plaintext SSLRequest and SSL data in one read()
+     * so lets remove SSLRequest and call again mysql_on_read()
+     */
     if (nread > MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE) {
-        /* sometimes SSL data are here too, so call mysql_on_read again without MYSQL_SSL_CONN_REQUEST_PACKET */
         int newlen = nread - (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE);
         char *base = malloc (newlen);
         memcpy(base, uv_buf->base + (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE), nread - (MYSQL_PACKET_HEADER_SIZE + MYSQL_SSL_CONN_REQUEST_PACKET_SIZE));
@@ -667,7 +665,7 @@ int is_private_address(struct conn_data *conn_data) {
             break;
         }
         case AF_INET6: {
-            /* TODO */
+            /* TODO: we dont have ipv6 yet */
             return 0;
         }
     }

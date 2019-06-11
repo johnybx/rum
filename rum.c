@@ -109,7 +109,7 @@ main (int ac, char *av[])
         {"connect-timeout", required_argument, 0, 0},
         {"pidfile", required_argument, 0, 'p'},
         {"loglogins", no_argument, 0, 'L'},
-        {"server-ssl", no_argument, 0, 0},
+        {"ssl-server", no_argument, 0, 0},
         {"ssl-cert", required_argument, 0, 0},
         {"ssl-key", required_argument, 0, 0},
         {0, 0, 0, 0}
@@ -126,7 +126,7 @@ main (int ac, char *av[])
             if (strcmp (long_options[option_index].name, "connect-timeout") ==
                 0)
                 connect_timeout = atoi (optarg);
-            if (strcmp (long_options[option_index].name, "server-ssl") == 0)
+            if (strcmp (long_options[option_index].name, "ssl-server") == 0)
                 server_ssl = 1;
             if (strcmp (long_options[option_index].name, "ssl-cert") == 0)
                 ssl_cert = strdup(optarg);
@@ -375,7 +375,7 @@ usage ()
 {
     printf
         ("\n./rum -s [tcp|ssl]:host:port [-s [tcp|ssl]:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\t"
-         "--server-ssl - when using cdb (-M|-P) allow mysql/postgresql clients to connect with ssl (--ssl-cert/key required)"
+         "--ssl-server - when using cdb (-M|-P) allow mysql/postgresql clients to connect with ssl (--ssl-cert/key required)"
          "\n\t"
          "--ssl-cert crt - path to cert file"
          "\n\t"

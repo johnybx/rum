@@ -110,14 +110,14 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
           if (conn_data->listener->s[0]=='t') {
             uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa_in, &sa_size);
             ip = inet_ntoa(sa_in.sin_addr);
-            logmsg ("%s: user %s login from %s", __FUNCTION__, user, ip);
+            logmsg ("%s: user %s login from %s (ssl: %s)", __FUNCTION__, user, ip, (conn_data->ssl?"true":"false"));
           } else {
-            logmsg ("%s: user %s login from socket", __FUNCTION__, user);
+            logmsg ("%s: user %s login from socket (ssl: %s)", __FUNCTION__, user, (conn_data->ssl?"true":"false"));
           }
         }
     } else {
         /* if user is not found in cdb, sent client error msg & close connection  */
-        logmsg ("%s: user %s not found in cdb", __FUNCTION__, user);
+        logmsg ("%s: user %s not found in cdb (ssl: %s)", __FUNCTION__, user, (conn_data->ssl?"true":"false"));
 
         memset (buf, '\0', sizeof (buf));
         buf[0] = 'E';
@@ -136,19 +136,27 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         memcpy (buf + 1 + 4 + buf1len + 1 + buf2len + 1 + buf3len + 1, buf4,
                 buf4len);
 
-        uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
-        uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-        newbuf->base = malloc (buflen);
-        newbuf->len = buflen;
-        memcpy (newbuf->base, buf, buflen);
-        req->data = newbuf;
-        if (uv_write (req, conn_data->stream, newbuf, 1, on_write_free)) {
-            free (newbuf->base);
-            free (newbuf);
-            free (req);
-            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-                free (shutdown);
+        if (conn_data->ssl) {
+            int rc = SSL_write(conn_data->ssl, buf, buflen);
+            if (rc > 0) {
+                flush_ssl(conn_data);
+            }
+        } else {
+            uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+            newbuf->base = malloc (buflen);
+            newbuf->len = buflen;
+            memcpy (newbuf->base, buf, buflen);
+
+            uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+            req->data = newbuf;
+            if (uv_write (req, conn_data->stream, newbuf, 1, on_write_free)) {
+                free (newbuf->base);
+                free (newbuf);
+                free (req);
+                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+                    free (shutdown);
+                }
             }
         }
 

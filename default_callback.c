@@ -34,7 +34,7 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
     buf->base = constbuf->base;
     buf->len = constbuf->len;
 
-    /* if this connection is ssl, decrypt data from buf->base into buf->base */
+    /* if this connection is ssl, decrypt data in buf->base */
     if (conn_data->ssl && nread > 0) {
         nread = handle_ssl(stream, nread, buf);
         if (nread <= 0) {

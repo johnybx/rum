@@ -290,16 +290,17 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
           if (conn_data->listener->s[0]=='t') {
             uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa_in, &sa_size);
             ip = inet_ntoa(sa_in.sin_addr);
-            logmsg ("%s: user %s login from %s", __FUNCTION__, user, ip);
+
+            logmsg ("%s: user %s login from %s (ssl: %s)", __FUNCTION__, user, ip, (conn_data->ssl?"true":"false"));
           } else {
-            logmsg ("%s: user %s login from socket", __FUNCTION__, user);
+            logmsg ("%s: user %s login from socket (ssl: %s)", __FUNCTION__, user, (conn_data->ssl?"true":"false"));
           }
         }
     } else {
         /* if user is not found in cdb, sent client error msg & close connection  */
         destination = first_destination;
 
-        logmsg ("%s: user %s not found in cdb", __FUNCTION__, user);
+        logmsg ("%s: user %s not found in cdb (ssl: %s)", __FUNCTION__, user, (conn_data->ssl?"true":"false"));
         /* we reply access denied  */
         memcpy (buf, ERR_LOGIN_PACKET_PREFIX,
                 sizeof (ERR_LOGIN_PACKET_PREFIX));

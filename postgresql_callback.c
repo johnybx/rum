@@ -30,6 +30,7 @@ postgresql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constb
     buf->base = constbuf->base;
     buf->len = constbuf->len;
 
+    /* if this connection is ssl, decrypt data in buf->base */
     if (conn_data->ssl && nread > 0) {
         nread = handle_ssl(stream, nread, buf);
         if (nread <= 0) {
@@ -50,65 +51,62 @@ postgresql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constb
                 /* first data from client */
                 pg_handle_init_packet_from_client (conn_data, buf, nread);
             } else if (conn_data->type == CONN_TARGET) {
-                if (conn_data->mitm && conn_data->mitm->handshake == 3) {
-                    /* sslrequest reply from destination server */
-                    if (nread != 1) {
-                        logmsg ("%s: sslrequest reply should have 1 byte, but has %d",
-                                __FUNCTION__, nread);
-                        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-                        if (uv_shutdown (shutdown, stream, on_shutdown)) {
-                            free (shutdown);
+                if (conn_data->mitm && conn_data->mitm->handshake == 3 && nread == 1) {
+                    /* received sslrequest reply from destination server */
+                    if (buf->base[0] == 'S') {
+                        /* server said it support SSL, enable it */
+                        enable_client_ssl(conn_data);
+
+                        /* send server client auth packet over SSL */
+                        if (conn_data->ssl && conn_data->mitm && conn_data->mitm->client_auth_packet) {
+                            uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+                            newbuf->base = conn_data->mitm->client_auth_packet;
+                            newbuf->len = conn_data->mitm->client_auth_packet_len;
+
+                            conn_data->pending = malloc (sizeof (struct pending));
+                            conn_data->pending->next = NULL;
+                            conn_data->pending->buf = newbuf;
+
+                            conn_data->mitm->client_auth_packet = NULL;
+                        } else {
+                            /* this should never happend */
+                            logmsg ("%s: error debug1", __FUNCTION__);
+
+                            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                            uv_shutdown (shutdown, stream, on_shutdown);
                         }
                     } else {
-                        if (buf->base[0] == 'S') {
-                            printf("server supoprt ssl\n");
-                            /* enable SSL */
-                            enable_client_ssl(conn_data);
+                        /* server sait it doesnt support SSL, continue with plaintext */
+                        /* send server client auth packet */
+                        if (conn_data->mitm && conn_data->mitm->client_auth_packet) {
+                            uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
+                            uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
+                            newbuf->base = conn_data->mitm->client_auth_packet;
+                            newbuf->len = conn_data->mitm->client_auth_packet_len;
+                            req->data = newbuf;
+                            conn_data->mitm->client_auth_packet = NULL;
+                            if (uv_write (req, stream, newbuf, 1, on_write_free)) {
+                                logmsg ("%s: uv_write(postgresql client_auth_packet) failed",
+                                        __FUNCTION__);
 
-                            /* send server client auth packet over SSL */
-                            if (conn_data->ssl && conn_data->mitm && conn_data->mitm->client_auth_packet) {
-                                uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-                                newbuf->base = conn_data->mitm->client_auth_packet;
-                                newbuf->len = conn_data->mitm->client_auth_packet_len;
+                                free (newbuf->base);
+                                free (newbuf);
+                                free (req);
 
-                                conn_data->pending = malloc (sizeof (struct pending));
-                                conn_data->pending->next = NULL;
-                                conn_data->pending->buf = newbuf;
-
-                                conn_data->mitm->client_auth_packet = NULL;
+                                uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                                uv_shutdown (shutdown, stream, on_shutdown);
                             }
-
-                            /* change callbacks to on_read */
-                            uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
-                            uv_read_start (conn_data->stream, alloc_cb, on_read);
                         } else {
-                            printf("server dont supoprt ssl\n");
-                            /* server not support ssl */
-                            /* send server client auth packet */
-                            if (conn_data->mitm && conn_data->mitm->client_auth_packet) {
-                                uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
-                                uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
-                                newbuf->base = conn_data->mitm->client_auth_packet;
-                                newbuf->len = conn_data->mitm->client_auth_packet_len;
-                                req->data = newbuf;
-                                conn_data->mitm->client_auth_packet = NULL;
-                                if (uv_write (req, stream, newbuf, 1, on_write_free)) {
-                                    logmsg ("%s: uv_write(postgresql client_auth_packet) failed",
-                                            __FUNCTION__);
+                            /* this should never happend */
+                            logmsg ("%s: error debug2", __FUNCTION__);
 
-                                    free (newbuf->base);
-                                    free (newbuf);
-                                    free (req);
-
-                                    uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-                                    uv_shutdown (shutdown, stream, on_shutdown);
-                                }
-
-                                uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
-                                uv_read_start (conn_data->stream, alloc_cb, on_read);
-                            }
+                            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+                            uv_shutdown (shutdown, stream, on_shutdown);
                         }
                     }
+                    /* change callbacks to on_read */
+                    uv_read_start (conn_data->remote->stream, alloc_cb, on_read);
+                    uv_read_start (conn_data->stream, alloc_cb, on_read);
                 }
             }
         } else if (nread < 0) {
