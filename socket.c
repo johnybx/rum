@@ -190,6 +190,7 @@ on_outgoing_connection (uv_connect_t * connect, int status)
     uv_tcp_keepalive ((uv_tcp_t *) stream, 1, 60);
 
     /* on successfull connect */
+    conn_data->connected = 1;
     if (mysql_cdb_file) {
         r = uv_read_start (stream, alloc_cb, mysql_on_read_disable_read_timeout);
     } else if (postgresql_cdb_file) {
@@ -311,7 +312,7 @@ on_incoming_connection (uv_stream_t * server, int status)
     conn_data_client->listener = listener;
     conn_data_client->stream = client;
     conn_data_client->connecting = 0;
-    conn_data_client->connected = 0;
+    conn_data_client->connected = 1;
     conn_data_client->connect_timer = NULL;
     conn_data_client->read_timer = NULL;
     conn_data_client->destination = NULL;

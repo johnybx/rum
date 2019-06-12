@@ -181,10 +181,17 @@ on_shutdown (uv_shutdown_t * shutdown, int status)
     if (conn_data->remote && conn_data->remote->stream) {
         conn_data->remote->remote = NULL;
         uv_read_stop ((uv_stream_t *) conn_data->remote->stream);
+        uv_shutdown_t *shutdown_remote = malloc (sizeof (uv_shutdown_t));
 
-        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-        if (uv_shutdown (shutdown, conn_data->remote->stream, on_shutdown)) {
-            free (shutdown);
+        if (conn_data->remote->connected) {
+            if (uv_shutdown (shutdown_remote, conn_data->remote->stream, on_shutdown)) {
+                free (shutdown_remote);
+            }
+        } else {
+            /* remote stream is not yet connected (eg. client close connection before successful connect to remote server)
+             * we need to manualy call on_shutdown callback and free resources */
+            shutdown_remote->handle = conn_data->remote->stream;
+            on_shutdown(shutdown_remote, 0);
         }
     }
 
