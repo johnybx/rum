@@ -17,7 +17,7 @@ SSL_CTX *ctx = NULL;
 SSL_CTX *client_ctx = NULL;
 char *ssl_cert = NULL;
 char *ssl_key = NULL;
-char *ssl_ciphers = "EECDH+AESGCM:EDH+AESGCM";
+char *ssl_ciphers = SSL_CIPHERS;
 char *ssl_min_proto = NULL;
 char *ssl_max_proto = NULL;
 
@@ -262,7 +262,7 @@ main (int ac, char *av[])
             SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
         }
     } else {
-        SSL_CTX_set_min_proto_version(ctx, TLS1_1_VERSION);
+        SSL_CTX_set_min_proto_version(ctx, TLS1_VERSION);
     }
 
     if (ssl_max_proto) {
@@ -410,13 +410,13 @@ usage ()
          "\n\t"
          "--ssl-key key - path to key file"
          "\n\t"
-         "--ssl-ciphers cipherlist (default \"EECDH+AESGCM:EDH+AESGCM\")"
+         "--ssl-ciphers cipherlist (default \"%s\")"
          "\n\t"
-         "--ssl-min-proto proto (default tls1.1)"
+         "--ssl-min-proto proto (default tls1)"
          "\n\t"
          "--ssl-max-proto proto (default tls1.2)"
          "\n\t"
-         "\n\n");
+         "\n\n", SSL_CIPHERS);
     exit (-1);
 }
 
