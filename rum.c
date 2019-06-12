@@ -6,7 +6,6 @@ struct destination *first_destination = NULL;
 
 extern char *mysql_cdb_file;
 extern char *postgresql_cdb_file;
-char logstring[512];
 int mode = MODE_NORMAL;
 int destinations = 0;
 int connect_timeout = CONNECT_TIMEOUT;
@@ -19,6 +18,7 @@ SSL_CTX *client_ctx = NULL;
 char *ssl_cert = NULL;
 char *ssl_key = NULL;
 
+char *mysqltype = NULL;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -54,22 +54,8 @@ main (int ac, char *av[])
 
     signal (SIGPIPE, SIG_IGN);
 
-    char *mysqltype = NULL;
-
     setenv ("TZ", ":/etc/localtime", 0);
     tzset ();
-
-    memset (logstring, '\0', sizeof (logstring));
-    for (i = 0; i < ac; i++) {
-        if (strlen (logstring) + strlen (av[i]) >= sizeof (logstring)) {
-            break;
-        }
-        strcat (logstring, av[i]);
-
-        if (i != ac - 1) {
-            strcat (logstring, " ");
-        }
-    }
 
     sigint = malloc (sizeof (uv_signal_t));
     sigterm = malloc (sizeof (uv_signal_t));
@@ -397,14 +383,23 @@ logmsg (const char *fmt, ...)
 {
     va_list args;
     char tmpmsg[4096];
+    char *logstring;
 
     va_start (args, fmt);
     vsnprintf (tmpmsg, sizeof (tmpmsg), fmt, args);
     va_end (args);
 
+    if (mysql_cdb_file) {
+        logstring = mysqltype;
+    } else if (postgresql_cdb_file) {
+        logstring = "postgresql";
+    } else {
+        logstring = "rum";
+    }
+
     syslog (LOG_DAEMON | LOG_WARNING, "[%s] %s", logstring, tmpmsg);
     if (!daemonize) {
-        fprintf(stderr,"%s\n", tmpmsg);
+        fprintf(stderr,"%s %s\n", logstring, tmpmsg);
     }
 
 }
