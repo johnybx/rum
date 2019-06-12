@@ -411,8 +411,11 @@ usage ()
          "--ssl-key key - path to key file"
          "\n\t"
          "--ssl-ciphers cipherlist (default \"EECDH+AESGCM:EDH+AESGCM\")"
+         "\n\t"
          "--ssl-min-proto proto (default tls1.1)"
+         "\n\t"
          "--ssl-max-proto proto (default tls1.2)"
+         "\n\t"
          "\n\n");
     exit (-1);
 }
