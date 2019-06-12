@@ -194,7 +194,6 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         }
     }
 
-
     /* check if size ends in user[1], so user has at least 1 char */
     if (nread < MYSQL_PACKET_HEADER_SIZE + MYSQL_AUTH_PACKET_USER_POS + 1) {
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
@@ -311,6 +310,7 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         buf[0] = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 5;
 
         if (conn_data->ssl) {
+            increment_packet_seq(buf);
             SSL_write(conn_data->ssl, buf, buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
             flush_ssl(conn_data);
         } else {
@@ -494,17 +494,14 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
         }
     }
 
-    free_mitm (conn_data->mitm);
-    conn_data->mitm = NULL;
-    conn_data->remote->mitm = NULL;
+    conn_data->mitm->handshake = 3;
 
-    if (uv_read_start (conn_data->stream, alloc_cb, on_read)) {
+    if (uv_read_start (conn_data->stream, alloc_cb, mysql_on_read)) {
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
         if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
             free (shutdown);
         }
         return 0;
-
     }
     if (uv_read_start (conn_data->remote->stream, alloc_cb, on_read)) {
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
