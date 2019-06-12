@@ -87,7 +87,7 @@ on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
                         p->buf = buf;
                     } else {
                         free (buf->base);
-                        ERR_print_errors_cb(logmsg_ssl, "handle_ssl");
+                        ERR_print_errors_cb(logmsg_ssl, conn_data);
                         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
                         if (uv_shutdown (shutdown, stream, on_shutdown)) {
                             free (shutdown);

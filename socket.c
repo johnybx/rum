@@ -515,7 +515,7 @@ enable_client_ssl (struct conn_data *conn_data)
 
     if (rc <= 0) {
         SSL_get_error(conn_data->ssl, rc);
-        ERR_print_errors_cb(logmsg_ssl, "handle_ssl");
+        ERR_print_errors_cb(logmsg_ssl, conn_data);
     }
 
     flush_ssl(conn_data);
@@ -590,7 +590,7 @@ handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf)
                     return -1;
                 }
             } else {
-                ERR_print_errors_cb(logmsg_ssl, "handle_ssl");
+                ERR_print_errors_cb(logmsg_ssl, conn_data);
                 uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
                 if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
                     free (shutdown);
@@ -648,6 +648,26 @@ int flush_ssl(struct conn_data *conn_data) {
 }
 
 /* check if ip address of remote is from private space */
+char *get_ip(struct conn_data *conn_data) {
+    struct sockaddr_storage sa;
+    int sa_size = sizeof (struct sockaddr_storage);
+    char ip[INET6_ADDRSTRLEN];
+    uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa, &sa_size);
+    switch(sa.ss_family) {
+        case AF_INET: {
+            struct sockaddr_in *addr_in = (struct sockaddr_in *)&sa;
+            inet_ntop(AF_INET, &(addr_in->sin_addr), (char *) &ip, INET_ADDRSTRLEN);
+
+            return strdup(ip);
+        }
+        case AF_INET6: {
+            /* TODO: we dont have ipv6 yet */
+            return NULL;
+        }
+    }
+
+    return NULL;
+}
 int is_private_address(struct conn_data *conn_data) {
     struct sockaddr_storage sa;
     int sa_size = sizeof (struct sockaddr_storage);

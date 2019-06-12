@@ -191,6 +191,7 @@ int enable_server_ssl (struct conn_data *conn_data);
 int enable_server_ssl_mysql (struct conn_data *conn_data, const uv_buf_t * uv_buf, size_t nread);
 int enable_client_ssl (struct conn_data *conn_data);
 int is_private_address(struct conn_data *conn_data);
+char *get_ip(struct conn_data *conn_data);
 
 /* parse_arg.c */
 void parse_arg (char *arg, char *type, struct sockaddr_in *sin,

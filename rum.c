@@ -17,6 +17,9 @@ SSL_CTX *ctx = NULL;
 SSL_CTX *client_ctx = NULL;
 char *ssl_cert = NULL;
 char *ssl_key = NULL;
+char *ssl_ciphers = "EECDH+AESGCM:EDH+AESGCM";
+char *ssl_min_proto = NULL;
+char *ssl_max_proto = NULL;
 
 char *mysqltype = NULL;
 
@@ -98,6 +101,9 @@ main (int ac, char *av[])
         {"ssl-server", no_argument, 0, 0},
         {"ssl-cert", required_argument, 0, 0},
         {"ssl-key", required_argument, 0, 0},
+        {"ssl-ciphers", required_argument, 0, 0},
+        {"ssl-min-proto", required_argument, 0, 0},
+        {"ssl-max-proto", required_argument, 0, 0},
         {0, 0, 0, 0}
     };
 
@@ -118,7 +124,12 @@ main (int ac, char *av[])
                 ssl_cert = strdup(optarg);
             if (strcmp (long_options[option_index].name, "ssl-key") == 0)
                 ssl_key = strdup(optarg);
-
+            if (strcmp (long_options[option_index].name, "ssl-ciphers") == 0)
+                ssl_ciphers = strdup(optarg);
+            if (strcmp (long_options[option_index].name, "ssl-min-proto") == 0)
+                ssl_min_proto = strdup(optarg);
+            if (strcmp (long_options[option_index].name, "ssl-max-proto") == 0)
+                ssl_max_proto = strdup(optarg);
             break;
 
         case 'b':
@@ -237,12 +248,42 @@ main (int ac, char *av[])
     client_ctx = SSL_CTX_new(TLS_client_method());
 
     ctx = SSL_CTX_new(TLS_server_method());
-    const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE;
-    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-    /* tls1.3 not working with mariadb-client-core-10.3, not sure why, force tls1.2 */
-    SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
+    const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE;
+    if (ssl_min_proto) {
+        if (strcmp(ssl_min_proto, "ssl3") == 0) {
+            SSL_CTX_set_min_proto_version(ctx, SSL3_VERSION);
+        } else if (strcmp(ssl_min_proto, "tls1") == 0) {
+            SSL_CTX_set_min_proto_version(ctx, TLS1_VERSION);
+        } else if (strcmp(ssl_min_proto, "tls1.1") == 0) {
+            SSL_CTX_set_min_proto_version(ctx, TLS1_1_VERSION);
+        } else if (strcmp(ssl_min_proto, "tls1.2") == 0) {
+            SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+        }else if (strcmp(ssl_min_proto, "tls1.3") == 0) {
+            SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
+        }
+    } else {
+        SSL_CTX_set_min_proto_version(ctx, TLS1_1_VERSION);
+    }
+
+    if (ssl_max_proto) {
+        if (strcmp(ssl_max_proto, "ssl3") == 0) {
+            SSL_CTX_set_max_proto_version(ctx, SSL3_VERSION);
+        } else if (strcmp(ssl_max_proto, "tls1") == 0) {
+            SSL_CTX_set_max_proto_version(ctx, TLS1_VERSION);
+        } else if (strcmp(ssl_max_proto, "tls1.1") == 0) {
+            SSL_CTX_set_max_proto_version(ctx, TLS1_1_VERSION);
+        } else if (strcmp(ssl_max_proto, "tls1.2") == 0) {
+            SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
+        } else if (strcmp(ssl_max_proto, "tls1.3") == 0) {
+            SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+        }
+    } else {
+        /* tls1.3 not working with mariadb-client-core-10.3, not sure why, force tls1.2 */
+        SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
+    }
+
     SSL_CTX_set_options(ctx, flags);
-    SSL_CTX_set_cipher_list(ctx, "EECDH+AESGCM:EDH+AESGCM");
+    SSL_CTX_set_cipher_list(ctx, ssl_ciphers);
     SSL_CTX_set_ecdh_auto(ctx, 1);
     if (ssl_cert) {
         if (SSL_CTX_use_certificate_chain_file(ctx, ssl_cert) <= 0) {
@@ -368,13 +409,30 @@ usage ()
          "--ssl-cert crt - path to cert file (optional intermediate certs in same file)"
          "\n\t"
          "--ssl-key key - path to key file"
+         "\n\t"
+         "--ssl-ciphers cipherlist (default \"EECDH+AESGCM:EDH+AESGCM\")"
+         "--ssl-min-proto proto (default tls1.1)"
+         "--ssl-max-proto proto (default tls1.2)"
          "\n\n");
     exit (-1);
 }
 
 int logmsg_ssl(const char *str, size_t len, void *u)
 {
-    logmsg("%u %s", u, str);
+    struct conn_data *conn_data = u;
+    char *prefix;
+    char *ip = get_ip(conn_data);
+
+    if (conn_data->type == CONN_TARGET) {
+        prefix = "upstream";
+    } else {
+        prefix = "client";
+    }
+
+    logmsg("%s %s %s", prefix, ip, str);
+    if (ip) {
+        free(ip);
+    }
     return 1;
 }
 
