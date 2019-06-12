@@ -290,16 +290,35 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
             uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa_in, &sa_size);
             ip = inet_ntoa(sa_in.sin_addr);
 
-            logmsg ("%s: user %s login from %s (ssl: %s)", __FUNCTION__, user, ip, (conn_data->ssl?"true":"false"));
+            char ssl[512];
+            if (conn_data->ssl) {
+                int reused = SSL_session_reused (conn_data->ssl);
+
+                snprintf(ssl, sizeof(ssl), " (ssl%s %s)", (reused?" reused":""), SSL_get_cipher_name(conn_data->ssl));
+                printf("%s\n", ssl);
+            } else {
+                snprintf(ssl, sizeof(ssl), "");
+            }
+
+            logmsg ("user %s login from %s%s", user, ip, ssl);
           } else {
-            logmsg ("%s: user %s login from socket (ssl: %s)", __FUNCTION__, user, (conn_data->ssl?"true":"false"));
+            logmsg ("user %s login from socket", user);
           }
         }
     } else {
         /* if user is not found in cdb, sent client error msg & close connection  */
         destination = first_destination;
 
-        logmsg ("%s: user %s not found in cdb (ssl: %s)", __FUNCTION__, user, (conn_data->ssl?"true":"false"));
+        char ssl[512];
+        if (conn_data->ssl) {
+            int reused = SSL_session_reused (conn_data->ssl);
+
+            snprintf(ssl, sizeof(ssl), " (ssl%s %s)", (reused?" reused":""), SSL_get_cipher_name(conn_data->ssl));
+        } else {
+            snprintf(ssl, sizeof(ssl), "");
+        }
+
+        logmsg ("user %s not found in cdb%s", user, ssl);
         /* we reply access denied  */
         memcpy (buf, ERR_LOGIN_PACKET_PREFIX,
                 sizeof (ERR_LOGIN_PACKET_PREFIX));

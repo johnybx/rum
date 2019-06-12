@@ -246,6 +246,7 @@ main (int ac, char *av[])
     OpenSSL_add_ssl_algorithms();
 
     client_ctx = SSL_CTX_new(TLS_client_method());
+    SSL_CTX_set_session_cache_mode(client_ctx, SSL_SESS_CACHE_CLIENT);
 
     ctx = SSL_CTX_new(TLS_server_method());
     const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE;
