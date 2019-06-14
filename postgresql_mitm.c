@@ -102,32 +102,9 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
 
     if (pg_server != NULL) {
         destination = add_destination(pg_server);
-
-        if (loglogins) {
-          struct sockaddr_in sa_in;
-          int sa_size = sizeof (struct sockaddr_in);
-          char *ip = NULL;
-          if (conn_data->listener->s[0]=='t') {
-            uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa_in, &sa_size);
-            ip = inet_ntoa(sa_in.sin_addr);
-
-            char ssl[512];
-            if (conn_data->ssl) {
-                int reused = SSL_session_reused (conn_data->ssl);
-
-                snprintf(ssl, sizeof(ssl), " (ssl%s %s)", (reused?" reused":""), SSL_get_cipher_name(conn_data->ssl));
-            } else {
-                snprintf(ssl, sizeof(ssl), "");
-            }
-
-            logmsg ("user %s login from %s%s", user, ip, ssl);
-          } else {
-            logmsg ("user %s login from socket", user);
-          }
-        }
     } else {
         /* if user is not found in cdb, sent client error msg & close connection  */
-        logmsg ("user %s not found in cdb (ssl: %s)", user, (conn_data->ssl?"true":"false"));
+        logmsg ("user %s not found in cdb from %s%s", user, get_ipport (conn_data), get_sslinfo (conn_data));
 
         memset (buf, '\0', sizeof (buf));
         buf[0] = 'E';
@@ -201,6 +178,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
     conn_data_remote =
         create_server_connection (conn_data, destination, conn_data->listener);
     if (!conn_data_remote) {
+        logmsg ("%s: failed to create remote server connection", __FUNCTION__);
         if (pg_server)
             free (pg_server);
 
@@ -211,6 +189,12 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
 
         return 1;
     }
+
+
+    if (loglogins) {
+        logmsg ("user %s login from %s%s, upstream: %s", user, get_ipport (conn_data), get_sslinfo (conn_data), pg_server);
+    }
+
 
     conn_data->mitm->not_need_remote = 0;
     conn_data_remote->mitm = conn_data->mitm;

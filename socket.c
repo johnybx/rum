@@ -574,7 +574,7 @@ handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf)
     {
         /* check for enough space in uv_buf */
         int pending = BIO_pending(conn_data->ssl_read);
-        if (readbytes + pending > buf->len) {
+        if ((size_t) (readbytes + pending) > buf->len) {
             buf->base = realloc(buf->base, readbytes + pending);
             buf->len = readbytes + pending;
         }
@@ -648,27 +648,50 @@ int flush_ssl(struct conn_data *conn_data) {
     return pending;
 }
 
-/* check if ip address of remote is from private space */
-char *get_ip(struct conn_data *conn_data) {
+char *get_sslinfo (struct conn_data *conn_data)
+{
+    static char ssllog[512];
+    if (conn_data->ssl) {
+        int reused = SSL_session_reused (conn_data->ssl);
+
+        snprintf(ssllog, sizeof(ssllog), " (ssl%s %s %s)", (reused?" reused":""), SSL_get_version(conn_data->ssl), SSL_get_cipher_name(conn_data->ssl));
+    } else {
+        snprintf(ssllog, sizeof(ssllog), "");
+    }
+
+    return ssllog;
+}
+
+char *get_ipport(struct conn_data *conn_data) {
     struct sockaddr_storage sa;
     int sa_size = sizeof (struct sockaddr_storage);
-    char ip[INET6_ADDRSTRLEN];
+    static char ip[INET6_ADDRSTRLEN*2];
+
     uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa, &sa_size);
+
     switch(sa.ss_family) {
         case AF_INET: {
             struct sockaddr_in *addr_in = (struct sockaddr_in *)&sa;
             inet_ntop(AF_INET, &(addr_in->sin_addr), (char *) &ip, INET_ADDRSTRLEN);
-
-            return strdup(ip);
+            snprintf(ip + strlen(ip), sizeof(ip) - strlen(ip) - 1, ":%d", ntohs(addr_in->sin_port));
+            return ip;
         }
         case AF_INET6: {
             /* TODO: we dont have ipv6 yet */
             return NULL;
         }
+        case AF_UNIX: {
+            size_t len = sizeof(ip);
+            uv_pipe_getsockname((uv_pipe_t *) conn_data->stream, (char *)&ip, &len);
+            return ip;
+        }
+
     }
 
     return NULL;
 }
+
+/* check if ip address of remote is from private space */
 int is_private_address(struct conn_data *conn_data) {
     struct sockaddr_storage sa;
     int sa_size = sizeof (struct sockaddr_storage);

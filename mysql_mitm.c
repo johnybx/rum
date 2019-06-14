@@ -281,44 +281,11 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
     if (mysql_server != NULL) {
         destination = add_destination(mysql_server);
-
-        if (loglogins) {
-          struct sockaddr_in sa_in;
-          int sa_size = sizeof (struct sockaddr_in);
-          char *ip = NULL;
-          if (conn_data->listener->s[0]=='t') {
-            uv_tcp_getpeername((uv_tcp_t *) conn_data->stream, (struct sockaddr *)&sa_in, &sa_size);
-            ip = inet_ntoa(sa_in.sin_addr);
-
-            char ssl[512];
-            if (conn_data->ssl) {
-                int reused = SSL_session_reused (conn_data->ssl);
-
-                snprintf(ssl, sizeof(ssl), " (ssl%s %s)", (reused?" reused":""), SSL_get_cipher_name(conn_data->ssl));
-                printf("%s\n", ssl);
-            } else {
-                snprintf(ssl, sizeof(ssl), "");
-            }
-
-            logmsg ("user %s login from %s%s", user, ip, ssl);
-          } else {
-            logmsg ("user %s login from socket", user);
-          }
-        }
     } else {
         /* if user is not found in cdb, sent client error msg & close connection  */
         destination = first_destination;
 
-        char ssl[512];
-        if (conn_data->ssl) {
-            int reused = SSL_session_reused (conn_data->ssl);
-
-            snprintf(ssl, sizeof(ssl), " (ssl%s %s)", (reused?" reused":""), SSL_get_cipher_name(conn_data->ssl));
-        } else {
-            snprintf(ssl, sizeof(ssl), "");
-        }
-
-        logmsg ("user %s not found in cdb%s", user, ssl);
+        logmsg ("user %s not found in cdb from %s%s", user, get_ipport (conn_data), get_sslinfo (conn_data));
         /* we reply access denied  */
         memcpy (buf, ERR_LOGIN_PACKET_PREFIX,
                 sizeof (ERR_LOGIN_PACKET_PREFIX));
@@ -386,6 +353,7 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         create_server_connection (conn_data, destination, conn_data->listener);
 
     if (!conn_data_remote) {
+        logmsg ("%s: failed to create remote server connection", __FUNCTION__);
         uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
         if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
             free (shutdown);
@@ -395,6 +363,15 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
         return 1;
     }
+
+    if (loglogins) {
+        if (conn_data->listener->s[0]=='t') {
+            logmsg ("user %s login from %s%s, upstream: %s", user, get_ipport (conn_data), get_sslinfo (conn_data), mysql_server);
+        } else {
+            logmsg ("user %s login from socket, upstream: %s", user, mysql_server);
+        }
+    }
+
     conn_data->mitm->not_need_remote = 0;
     conn_data_remote->mitm = conn_data->mitm;
     conn_data_remote->listener = conn_data->listener;

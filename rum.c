@@ -20,6 +20,7 @@ char *ssl_key = NULL;
 char *ssl_ciphers = SSL_CIPHERS;
 char *ssl_min_proto = NULL;
 char *ssl_max_proto = NULL;
+int verbose = 0;
 
 char *mysqltype = NULL;
 
@@ -247,6 +248,7 @@ main (int ac, char *av[])
 
     client_ctx = SSL_CTX_new(TLS_client_method());
     SSL_CTX_set_session_cache_mode(client_ctx, SSL_SESS_CACHE_CLIENT);
+    SSL_CTX_set_cipher_list(client_ctx, ssl_ciphers);
 
     ctx = SSL_CTX_new(TLS_server_method());
     const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE;
@@ -280,7 +282,7 @@ main (int ac, char *av[])
         }
     } else {
         /* tls1.3 not working with mariadb-client-core-10.3, not sure why, force tls1.2 */
-        SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
+        SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
     }
 
     SSL_CTX_set_options(ctx, flags);
@@ -404,7 +406,35 @@ void
 usage ()
 {
     printf
-        ("\n./rum -s [tcp|ssl]:host:port [-s [tcp|ssl]:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]\n\t-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)\n\t-d - destination host:port\n\n\toptional:\n\t-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail\n\t-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list\n\t-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d\n\t-b - goto background\n\t-m - statistics port\n\t-M - enable handling of mysql connection with more destination servers, argument is path to cdb file\n\t-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file\n\t--connect-timeout 6 - connect timeout when server is not available (default 6)\n\t--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)\n\t"
+        ("\n"
+         "./rum -s [tcp|ssl]:host:port [-s [tcp|ssl]:host:port [-s sock:path]] [-d tcp:host:port] [-t mysqltype] [-b] [-m tcp:host:port] [-M /path/to/mysql.cdb] [-P /path/to/postgresql.cdb]"
+         "\n\t"
+         "-s - listen host:port or sockfile (host muste be some ip address from interface or 0.0.0.0 for all inerfaces)"
+         "\n\t"
+         "-d - destination host:port"
+         "\n\n\t"
+         "optional:"
+         "\n\t"
+         "-f tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - connect always to dst1 as first target and failover to second,... in case of fail"
+         "\n\t"
+         "-R tcp:dst1:port1,tcp:dst2:port2,tcp:dst3:port3,... - like -f but randomize tgt list"
+         "\n\t"
+         "-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d"
+         "\n\t"
+         "-b - goto background"
+         "\n\t"
+         "-m - statistics port"
+         "\n\t"
+         "-M - enable handling of mysql connection with more destination servers, argument is path to cdb file"
+         "\n\t"
+         "-P - enable handling of postgresql connection with more destination servers, argument is path to cdb file"
+         "\n\t"
+         "-L - log logins to syslog (when using -M or -P)"
+         "\n\t"
+         "--connect-timeout 6 - connect timeout when server is not available (default 6)"
+         "\n\t"
+         "--read-timeout 6 - read timeout from server, only for first data (default 6, use 0 to disable)"
+         "\n\t"
          "--ssl-server - when using cdb (-M|-P) allow mysql/postgresql clients to connect with ssl (--ssl-cert/key required)"
          "\n\t"
          "--ssl-cert crt - path to cert file (optional intermediate certs in same file)"
@@ -425,7 +455,7 @@ int logmsg_ssl(const char *str, size_t len, void *u)
 {
     struct conn_data *conn_data = u;
     char *prefix;
-    char *ip = get_ip(conn_data);
+    char *ip = get_ipport(conn_data);
 
     if (conn_data->type == CONN_TARGET) {
         prefix = "upstream";

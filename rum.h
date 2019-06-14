@@ -34,6 +34,7 @@
 
 /* AES256-SHA is needed for mysql-client-core-5.7 which is using yassl */
 #define SSL_CIPHERS "EECDH+AESGCM:EDH+AESGCM:EECDH+AES256:EDH+AES256:AES256-SHA"
+//#define SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
 
 #define MYSQL50_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x30\x2e\x39\x32\x2d\x6c\x6f\x67\x00\xbf\x96\xc2\x10\x69\x5f\x21\x23\x2a\x49\x73\x26\x00\x2c\xa2\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x60\x36\x28\x65\x44\x66\x54\x53\x22\x4c\x3b\x22\x00"
 #define MYSQL51_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x31\x2e\x36\x33\x2d\x6c\x6f\x67\x00\xc2\x0d\xca\x73\x47\x46\x65\x4b\x29\x29\x30\x57\x00\xff\xf7\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x45\x32\x6a\x42\x48\x23\x73\x3e\x76\x5c\x4b\x3f\x00"
@@ -194,7 +195,8 @@ int enable_server_ssl (struct conn_data *conn_data);
 int enable_server_ssl_mysql (struct conn_data *conn_data, const uv_buf_t * uv_buf, size_t nread);
 int enable_client_ssl (struct conn_data *conn_data);
 int is_private_address(struct conn_data *conn_data);
-char *get_ip(struct conn_data *conn_data);
+char *get_ipport(struct conn_data *conn_data);
+char *get_sslinfo(struct conn_data *conn_data);
 
 /* parse_arg.c */
 void parse_arg (char *arg, char *type, struct sockaddr_in *sin,
