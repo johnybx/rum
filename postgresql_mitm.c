@@ -3,6 +3,7 @@
 extern struct destination *first_destination;
 extern int loglogins;
 extern int server_ssl;
+extern int geoip;
 
 int
 pg_handle_init_packet_from_client (struct conn_data *conn_data,
@@ -93,23 +94,37 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
              sizeof ("user"), user_len);
     user[user_len] = '\0';
 
-    if (geo && conn_data->stream->type == UV_TCP) {
+    if (geoip && conn_data->stream->type == UV_TCP) {
         ip_mask_pair_t* allowed_ips = NULL;
         geo_country_t* allowed_countries = NULL;
         get_data_from_cdb_postgresql (user, user_len, &pg_server, &allowed_ips, &allowed_countries);
 
         struct sockaddr_in peer;
         int peer_len = sizeof(peer);
+        int allowed = 1;
+
         if (0 == uv_tcp_getpeername((uv_tcp_t*) conn_data->stream, (struct sockaddr*) &peer, &peer_len)) {
             bool ip_check = !allowed_ips || ip_in_networks(peer.sin_addr.s_addr, allowed_ips);
-            bool country_check = !allowed_countries || ip_in_countries(peer.sin_addr.s_addr, allowed_countries);
+            bool country_check = !allowed_countries || ip_in_countries((struct sockaddr *) &peer, allowed_countries);
 
-            if (!ip_check && !country_check) {
-                logmsg("Disconnected %s, country check: %u, ip check: %u failed", user, country_check, ip_check);
-                send_postgres_error(conn_data, "Access denied, login from unauthorized ip or country");
+            if ((allowed_ips && !ip_check) || (allowed_countries && !country_check)) {
+                allowed = 0;
+            }
 
+            if (allowed_ips) {
+                free (allowed_ips);
+            }
+
+            if (allowed_countries) {
+                free (allowed_countries);
+            }
+
+            if (!allowed) {
                 if (pg_server)
                     free (pg_server);
+
+                logmsg("Disconnected %s, country check: %u, ip check: %u failed", user, country_check, ip_check);
+                send_postgres_error(conn_data, "MAccess denied, login from unauthorized ip or country");
 
                 return 1;
             }

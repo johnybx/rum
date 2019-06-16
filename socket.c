@@ -662,6 +662,30 @@ char *get_sslinfo (struct conn_data *conn_data)
     return ssllog;
 }
 
+
+char *get_ip_sockaddr(struct sockaddr *sa) {
+    static char ip[INET6_ADDRSTRLEN];
+
+    switch(sa->sa_family) {
+        case AF_INET: {
+            struct sockaddr_in *addr_in = (struct sockaddr_in *)sa;
+            inet_ntop(AF_INET, &(addr_in->sin_addr), (char *) &ip, INET6_ADDRSTRLEN);
+            return ip;
+        }
+        case AF_INET6: {
+            struct sockaddr_in6 *addr_in = (struct sockaddr_in *)sa;
+            inet_ntop(AF_INET6, &(addr_in->sin6_addr), (char *) &ip, INET6_ADDRSTRLEN);
+            return ip;
+        }
+        case AF_UNIX: {
+            return "socket";
+        }
+
+    }
+
+    return NULL;
+}
+
 char *get_ipport(struct conn_data *conn_data) {
     struct sockaddr_storage sa;
     int sa_size = sizeof (struct sockaddr_storage);
@@ -672,13 +696,15 @@ char *get_ipport(struct conn_data *conn_data) {
     switch(sa.ss_family) {
         case AF_INET: {
             struct sockaddr_in *addr_in = (struct sockaddr_in *)&sa;
-            inet_ntop(AF_INET, &(addr_in->sin_addr), (char *) &ip, INET_ADDRSTRLEN);
+            inet_ntop(AF_INET, &(addr_in->sin_addr), (char *) &ip, INET6_ADDRSTRLEN);
             snprintf(ip + strlen(ip), sizeof(ip) - strlen(ip) - 1, ":%d", ntohs(addr_in->sin_port));
             return ip;
         }
         case AF_INET6: {
-            /* TODO: we dont have ipv6 yet */
-            return NULL;
+            struct sockaddr_in6 *addr_in = (struct sockaddr_in *)&sa;
+            inet_ntop(AF_INET6, &(addr_in->sin6_addr), (char *) &ip, INET6_ADDRSTRLEN);
+            snprintf(ip + strlen(ip), sizeof(ip) - strlen(ip) - 1, ":%d", ntohs(addr_in->sin6_port));
+            return ip;
         }
         case AF_UNIX: {
             size_t len = sizeof(ip);

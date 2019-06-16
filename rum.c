@@ -22,7 +22,7 @@ char *ssl_min_proto = NULL;
 char *ssl_max_proto = NULL;
 int verbose = 0;
 char *mysqltype = NULL;
-geo_t* geo = NULL;
+int geoip = 0;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -106,12 +106,13 @@ main (int ac, char *av[])
         {"ssl-min-proto", required_argument, 0, 0},
         {"ssl-max-proto", required_argument, 0, 0},
         {"geoip", required_argument, 0, 'g'},
+        {"verbose", no_argument, 0, 'v'},
         {0, 0, 0, 0}
     };
 
 
     while ((ch =
-            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:Lg:", long_options,
+            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:Lg:v", long_options,
                          &option_index)) != -1) {
         switch (ch) {
         case 0:
@@ -227,9 +228,15 @@ main (int ac, char *av[])
 
         case 'g':
             logmsg("Using geoip db %s", optarg);
-            geo = geo_new(optarg);
+            init_mmdb(optarg);
+            geoip = 1;
+            break;
+
+        case 'v':
+            verbose = 1;
             break;
         }
+
     }
 
     /* if mysql module is enabled, open cdb file and create EV_SIGNAL event which call repoen_cdb().
@@ -387,9 +394,7 @@ main (int ac, char *av[])
         free (postgresql_cdb_file);
     }
 
-    if (geo) {
-        geo_destroy(geo);
-    }
+    close_mmdb();
 
     struct destination *dst;
     dst = first_destination;
@@ -448,7 +453,7 @@ usage ()
          "\n\t"
          "--ssl-max-proto proto (default tls1.2)"
          "\n\t"
-         "-g - enable ip/geoip protection (with -M|-P)"
+         "-g /path/to/GeoLite2-Country.mmdb - enable ip/geoip protection (with -M|-P)"
          "\n\n", SSL_CIPHERS);
     exit (-1);
 }
@@ -606,9 +611,18 @@ bool ip_in_networks(uint32_t ip, ip_mask_pair_t* networks)
     return false;
 }
 
-bool ip_in_countries(uint32_t ip, geo_country_t* countries)
+bool ip_in_countries(struct sockaddr *sa, geo_country_t* countries)
 {
-    return geo_check_allowed_countries(geo, ip, countries);
+    /*
+    struct sockaddr_in *sin = sa;
+    sin->sin_addr.s_addr = inet_addr("37.9.169.143");
+
+    struct sockaddr_in6 sin;
+    sin.sin6_family=AF_INET6;
+    inet_pton(AF_INET6, "2a00:1450:4014:800::200e", (void *) &sin.sin6_addr);
+    */
+
+    return mmdb_check_allowed_countries(sa, countries);
 }
 
 void get_ip_access_from_cdb_tail(const char* buf, unsigned int remaining,

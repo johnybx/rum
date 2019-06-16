@@ -67,7 +67,7 @@
 #define MODE_FAILOVER_RR 2      /* -r tcp:...,tcp:... */
 #define MODE_FAILOVER_R 3       /* -R tcp:...,tcp:... */
 
-extern geo_t* geo;
+#define MMDB_RELOAD_TIME 3600
 struct listener
 {
     uv_stream_t *stream;        /* listening stream */
@@ -180,7 +180,7 @@ enum user_flag_e {
 };
 
 bool ip_in_networks(uint32_t ip, ip_mask_pair_t* network);
-bool ip_in_countries(uint32_t ip, geo_country_t* countries);
+bool ip_in_countries(struct sockaddr *sa, geo_country_t* countries);
 
 /* main.c */
 void usage ();
@@ -212,6 +212,7 @@ int enable_server_ssl_mysql (struct conn_data *conn_data, const uv_buf_t * uv_bu
 int enable_client_ssl (struct conn_data *conn_data);
 int is_private_address(struct conn_data *conn_data);
 char *get_ipport(struct conn_data *conn_data);
+char *get_ip_sockaddr(struct sockaddr *sa);
 char *get_sslinfo(struct conn_data *conn_data);
 
 /* parse_arg.c */
@@ -295,3 +296,4 @@ void on_connect_timeout (uv_timer_t * timer);
 void on_write (uv_write_t * req, int status);
 void on_write_free (uv_write_t * req, int status);
 void on_write_nofree (uv_write_t * req, int status);
+

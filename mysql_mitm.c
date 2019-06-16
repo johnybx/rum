@@ -10,6 +10,7 @@ extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
 extern struct destination *first_destination;
 extern int loglogins;
+extern int geoip;
 
 /* initialize struct mitm */
 struct mitm *
@@ -237,7 +238,7 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
              MYSQL_AUTH_PACKET_USER_POS, user_len);
     user[user_len] = '\0';
 
-    if (geo && conn_data->stream->type == UV_TCP) {
+    if (geoip && conn_data->stream->type == UV_TCP) {
         ip_mask_pair_t* allowed_ips = NULL;
         geo_country_t* allowed_countries = NULL;
         get_data_from_cdb (user, user_len, &mysql_server,
@@ -245,15 +246,30 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
         struct sockaddr_in peer;
         int peer_len = sizeof(peer);
+        int allowed = 1;
+
         if (0 == uv_tcp_getpeername((uv_tcp_t*) conn_data->stream, (struct sockaddr*) &peer, &peer_len)) {
             bool ip_check = !allowed_ips || ip_in_networks(peer.sin_addr.s_addr, allowed_ips);
-            bool country_check = !allowed_countries || ip_in_countries(peer.sin_addr.s_addr, allowed_countries);
+            bool country_check = !allowed_countries || ip_in_countries((struct sockaddr *) &peer, allowed_countries);
 
-            if (!ip_check && !country_check) {
+            if ((allowed_ips && !ip_check) || (allowed_countries && !country_check)) {
+                allowed = 0;
+            }
+
+            if (allowed_ips) {
+                free (allowed_ips);
+            }
+
+            if (allowed_countries) {
+                free (allowed_countries);
+            }
+
+            if (!allowed) {
                 logmsg("Disconnected %s, country check: %u, ip check: %u failed", user, country_check, ip_check);
                 send_mysql_error(conn_data, "Access denied, login from unauthorized ip or country");
                 return 1;
             }
+
         }
     } else {
         get_data_from_cdb (user, user_len, &mysql_server,
