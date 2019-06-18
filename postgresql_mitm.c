@@ -123,7 +123,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
                 if (pg_server)
                     free (pg_server);
 
-                logmsg("Disconnected %s, country check: %u, ip check: %u failed", user, country_check, ip_check);
+                logmsg("Disconnected %s from %s, country check: %u, ip check: %u failed", user, get_ipport(conn_data), country_check, ip_check);
                 send_postgres_error(conn_data, "MAccess denied, login from unauthorized ip or country");
 
                 return 1;

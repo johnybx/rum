@@ -265,8 +265,12 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
             }
 
             if (!allowed) {
-                logmsg("Disconnected %s, country check: %u, ip check: %u failed", user, country_check, ip_check);
+                logmsg("Disconnected %s from %s, country check: %u, ip check: %u failed", user, get_ipport(conn_data), country_check, ip_check);
                 send_mysql_error(conn_data, "Access denied, login from unauthorized ip or country");
+
+                if (mysql_server)
+                    free (mysql_server);
+
                 return 1;
             }
 
