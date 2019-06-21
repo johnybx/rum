@@ -16,7 +16,7 @@ void init_mmdb(const char* filename)
 {
     int status = MMDB_open(filename, MMDB_MODE_MMAP, &mmdb);
     if (MMDB_SUCCESS != status) {
-        fprintf (stderr, "cannot open MMDB %s", MMDB_strerror(status));
+        fprintf (stderr, "cannot open MMDB %s\n", MMDB_strerror(status));
         logmsg ("cannot open MMDB %s", MMDB_strerror(status));
     } else {
         mmdb_opened = 1;
@@ -48,8 +48,10 @@ void reopen_mmdb (uv_timer_t* handle)
 
 void close_mmdb()
 {
-    MMDB_close(&mmdb);
-    mmdb_opened = 0;
+    if (mmdb_opened) {
+        MMDB_close(&mmdb);
+        mmdb_opened = 0;
+    }
 
     uv_timer_stop(timer);
     free (timer->data);
