@@ -35,7 +35,7 @@
 #include <openssl/err.h>
 
 /* AES256-SHA is needed for mysql-client-core-5.7 which is using yassl */
-#define SSL_CIPHERS "EECDH+AESGCM:EDH+AESGCM:EECDH+AES256:EDH+AES256:AES256-SHA"
+#define SSL_CIPHERS "EECDH+AESGCM:EDH+AESGCM:EECDH+AES256:EDH+AES256:AES256-SHA:ECDHE+AES128:EDH+AES128"
 //#define SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
 
 #define MYSQL50_INIT_PACKET "\x38\x00\x00\x00\x0a\x35\x2e\x30\x2e\x39\x32\x2d\x6c\x6f\x67\x00\xbf\x96\xc2\x10\x69\x5f\x21\x23\x2a\x49\x73\x26\x00\x2c\xa2\x3f\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x60\x36\x28\x65\x44\x66\x54\x53\x22\x4c\x3b\x22\x00"
