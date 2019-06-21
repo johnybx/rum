@@ -293,8 +293,8 @@ main (int ac, char *av[])
             SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
         }
     } else {
-        /* tls1.3 not working with mariadb-client-core-10.3, not sure why, force tls1.2 */
-        SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+        /* tls1.3 not working with mariadb-client-core-10.3, not sure why, use default max tls1.2 */
+        SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
     }
 
     SSL_CTX_set_options(ctx, flags);
