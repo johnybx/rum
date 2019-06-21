@@ -462,7 +462,7 @@ int logmsg_ssl(const char *str, size_t len, void *u)
 {
     struct conn_data *conn_data = u;
     char *prefix;
-    char *ip = get_ipport(conn_data);
+    char *ipport = get_ipport(conn_data);
 
     if (conn_data->type == CONN_TARGET) {
         prefix = "upstream";
@@ -470,10 +470,7 @@ int logmsg_ssl(const char *str, size_t len, void *u)
         prefix = "client";
     }
 
-    logmsg("%s %s %s", prefix, ip, str);
-    if (ip) {
-        free(ip);
-    }
+    logmsg("%s %s %s", prefix, ipport, str);
     return 1;
 }
 
