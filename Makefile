@@ -6,7 +6,7 @@ LIBUV_DIR=libuv-v1.29.1
 #LDFLAGS=-flto
 LDLIBS=-L ${LIBUV_DIR}/.libs -lrt -lcdb -lm -lpthread -ldl -lcrypto -lssl -lmaxminddb
 #CFLAGS=-Wall -O2 -flto -g -I ${LIBUV_DIR}/include
-CFLAGS=-Wall -Wextra -march=sandybridge -O0 -flto -g -I ${LIBUV_DIR}/include
+CFLAGS=-Wall -Wextra -Wno-unused-parameter -march=sandybridge -O0 -flto -g -I ${LIBUV_DIR}/include
 LDFLAGS=-Wall -Wextra -march=sandybridge -O0 -flto -fuse-linker-plugin -g
 
 all: ${LIBUV_DIR}/.libs/libuv.a rum 

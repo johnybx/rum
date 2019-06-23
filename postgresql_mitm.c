@@ -10,7 +10,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
                                    const uv_buf_t * uv_buf, size_t nread)
 {
     char user[64];
-    int user_len;
+    size_t user_len;
     struct destination *destination = NULL;
     char *pg_server = NULL, *userptr;
     struct conn_data *conn_data_remote;

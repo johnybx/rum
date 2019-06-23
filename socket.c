@@ -673,7 +673,7 @@ char *get_ip_sockaddr(struct sockaddr *sa) {
             return ip;
         }
         case AF_INET6: {
-            struct sockaddr_in6 *addr_in = (struct sockaddr_in *)sa;
+            struct sockaddr_in6 *addr_in = (struct sockaddr_in6 *)sa;
             inet_ntop(AF_INET6, &(addr_in->sin6_addr), (char *) &ip, INET6_ADDRSTRLEN);
             return ip;
         }
@@ -701,7 +701,7 @@ char *get_ipport(struct conn_data *conn_data) {
             return ip;
         }
         case AF_INET6: {
-            struct sockaddr_in6 *addr_in = (struct sockaddr_in *)&sa;
+            struct sockaddr_in6 *addr_in = (struct sockaddr_in6 *)&sa;
             inet_ntop(AF_INET6, &(addr_in->sin6_addr), (char *) &ip, INET6_ADDRSTRLEN);
             snprintf(ip + strlen(ip), sizeof(ip) - strlen(ip) - 1, ":%d", ntohs(addr_in->sin6_port));
             return ip;
