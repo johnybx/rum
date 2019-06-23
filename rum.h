@@ -263,6 +263,7 @@ int check_server_side_ssl_flag(char *packet, size_t len);
 void enable_server_side_ssl_flag();
 int check_client_side_ssl_flag(char *packet);
 void enable_client_side_ssl_flag(char *packet);
+void disable_client_side_ssl_flag(char *packet);
 void decrement_packet_seq(char *packet);
 void increment_packet_seq(char *packet);
 void print_packet_seq(char *packet);

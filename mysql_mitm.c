@@ -485,6 +485,7 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
         conn_data->pending->next = NULL;
         conn_data->pending->buf = newbuf;
     } else {
+        disable_client_side_ssl_flag(newbuf->base);
         uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
         req->data = newbuf;
         if (uv_write (req, conn_data->stream, newbuf, 1, on_write)) {
@@ -570,7 +571,7 @@ check_client_side_ssl_flag(char *packet)
     }
 }
 
-int
+void
 disable_client_side_ssl_flag(char *packet)
 {
     uint16_t client_capabilities;
@@ -578,11 +579,8 @@ disable_client_side_ssl_flag(char *packet)
     ptr =  packet + MYSQL_PACKET_HEADER_SIZE;
     memcpy (&client_capabilities, (void *)ptr, sizeof(uint16_t));
     if ((client_capabilities & 0x800) == 0x800) {
-        client_capabilities = client_capabilities & !0x800;
+        client_capabilities = client_capabilities & ~0x800;
         memcpy ((void *) ptr, &client_capabilities, sizeof(uint16_t));
-        return 1;
-    } else {
-        return 0;
     }
 }
 
