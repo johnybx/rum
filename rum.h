@@ -34,6 +34,8 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
+#include <curl/curl.h>
+
 /* AES256-SHA is needed for mysql-client-core-5.7 which is using yassl */
 #define SSL_CIPHERS "EECDH+AESGCM:EDH+AESGCM:EECDH+AES256:EDH+AES256:AES256-SHA:ECDHE+AES128:EDH+AES128"
 //#define SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
@@ -167,6 +169,17 @@ struct mitm
 
     /* from cdb database */
     char *password;
+
+    /* for logging */
+    char *user;
+
+    /* external lookup */
+    uv_timer_t *curl_timer;
+    CURLM *curl_handle;
+    char *curl_errorbuf;
+    char *data;
+    int data_len;
+
 };
 
 typedef struct __attribute__((packed)) {
@@ -264,6 +277,7 @@ void enable_server_side_ssl_flag();
 int check_client_side_ssl_flag(char *packet);
 void enable_client_side_ssl_flag(char *packet);
 void disable_client_side_ssl_flag(char *packet);
+void set_packet_seq(char *packet, uint8_t n);
 void decrement_packet_seq(char *packet);
 void increment_packet_seq(char *packet);
 void print_packet_seq(char *packet);
@@ -298,3 +312,9 @@ void on_write (uv_write_t * req, int status);
 void on_write_free (uv_write_t * req, int status);
 void on_write_nofree (uv_write_t * req, int status);
 
+
+/* curl.c */
+void get_data_from_curl (int external_data_len, char *external_data, char *user, int user_len, char **mysql_server,
+                   char **mysql_password, ip_mask_pair_t** allowed_ips,
+                   geo_country_t** allowed_countries);
+void make_curl_request(struct conn_data *conn_data, char *user);

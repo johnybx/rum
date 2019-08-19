@@ -11,6 +11,7 @@ extern int cache_mysql_init_packet_len;
 extern struct destination *first_destination;
 extern int loglogins;
 extern int geoip;
+extern char *external_lookup;
 
 /* initialize struct mitm */
 struct mitm *
@@ -28,6 +29,13 @@ init_mitm ()
     mitm->scramble2 = NULL;
     mitm->hash_stage1 = NULL;
     mitm->hash_stage2 = NULL;
+    mitm->user = NULL;
+
+    mitm->curl_timer = NULL;
+    mitm->curl_handle = NULL;
+    mitm->curl_errorbuf = NULL;
+    mitm->data = NULL;
+    mitm->data_len = 0;
 
     return mitm;
 }
@@ -64,6 +72,11 @@ free_mitm (struct mitm *mitm)
     if (mitm->hash_stage2) {
         free (mitm->hash_stage2);
         mitm->hash_stage2 = NULL;
+    }
+
+    if (mitm->user) {
+        free (mitm->user);
+        mitm->user = NULL;
     }
 
     free (mitm);
@@ -191,8 +204,11 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
             return enable_server_ssl_mysql(conn_data, uv_buf, nread);
         }
         if (conn_data->ssl) {
-            /* second call of handle_auth_packet_from_client */
-            decrement_packet_seq(uv_buf->base);
+            /* second(third) call of handle_auth_packet_from_client */
+            /* decrease packet seq only once */
+            if (!conn_data->mitm->client_auth_packet) {
+                decrement_packet_seq(uv_buf->base);
+            }
         }
     }
 
@@ -208,9 +224,11 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         return 1;
     }
 
-    conn_data->mitm->client_auth_packet_len = nread;
-    conn_data->mitm->client_auth_packet = malloc (nread);
-    memcpy (conn_data->mitm->client_auth_packet, uv_buf->base, nread);
+    if (!conn_data->mitm->client_auth_packet) {
+        conn_data->mitm->client_auth_packet_len = nread;
+        conn_data->mitm->client_auth_packet = malloc (nread);
+        memcpy (conn_data->mitm->client_auth_packet, uv_buf->base, nread);
+    }
 
     userptr =
         conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
@@ -237,12 +255,22 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
              conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
              MYSQL_AUTH_PACKET_USER_POS, user_len);
     user[user_len] = '\0';
+    if (!conn_data->mitm->user) {
+        conn_data->mitm->user = strdup(user);
+    }
 
     if (geoip && conn_data->stream->type == UV_TCP) {
         ip_mask_pair_t* allowed_ips = NULL;
         geo_country_t* allowed_countries = NULL;
-        get_data_from_cdb (user, user_len, &mysql_server,
-                           &conn_data->mitm->password, &allowed_ips, &allowed_countries);
+        if (conn_data->mitm->data && conn_data->mitm->data_len) {
+            get_data_from_curl (conn_data->mitm->data_len, conn_data->mitm->data,
+                                    user, user_len, &mysql_server,
+                                    &conn_data->mitm->password, &allowed_ips, &allowed_countries);
+
+        } else {
+            get_data_from_cdb (user, user_len, &mysql_server,
+                               &conn_data->mitm->password, &allowed_ips, &allowed_countries);
+        }
 
         struct sockaddr_in peer;
         int peer_len = sizeof(peer);
@@ -276,8 +304,14 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
 
         }
     } else {
-        get_data_from_cdb (user, user_len, &mysql_server,
-                           &conn_data->mitm->password, NULL, NULL);
+        if (conn_data->mitm->data && conn_data->mitm->data_len) {
+            get_data_from_curl (conn_data->mitm->data_len, conn_data->mitm->data,
+                                    user, user_len, &mysql_server,
+                                    &conn_data->mitm->password, NULL, NULL);
+        } else {
+            get_data_from_cdb (user, user_len, &mysql_server,
+                               &conn_data->mitm->password, NULL, NULL);
+        }
     }
 
     /* another size check if we know user_len, there must be at least 21 bytes after username
@@ -302,6 +336,30 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         return 1;
     }
 
+    if (mysql_server != NULL) {
+        destination = add_destination(mysql_server);
+    } else {
+        if (external_lookup && !conn_data->mitm->curl_handle) {
+            uv_read_stop(conn_data->stream);
+            make_curl_request(conn_data, user);
+            return 1;
+        }
+
+        /* if user is not found in cdb, sent client error msg & close connection  */
+        destination = first_destination;
+
+        logmsg ("user %s not found in cdb from %s%s", user, get_ipport (conn_data), get_sslinfo (conn_data));
+        /* we reply access denied  */
+
+        send_mysql_error(conn_data, "Access denied, unknown user '%s'", user);
+
+        if (mysql_server)
+            free (mysql_server);
+
+        return 1;
+    }
+
+
     i = conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
         MYSQL_AUTH_PACKET_USER_POS + user_len + 1;
     c = conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
@@ -320,30 +378,12 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
                          conn_data->mitm->hash_stage1);
     }
 
-    if (mysql_server != NULL) {
-        destination = add_destination(mysql_server);
-    } else {
-        /* if user is not found in cdb, sent client error msg & close connection  */
-        destination = first_destination;
-
-        logmsg ("user %s not found in cdb from %s%s", user, get_ipport (conn_data), get_sslinfo (conn_data));
-        /* we reply access denied  */
-
-        send_mysql_error(conn_data, "Access denied, unknown user '%s'", user);
-
-        if (mysql_server)
-            free (mysql_server);
-
-        return 1;
-    }
-
     /* if remote connection exists free it */
     if (conn_data->remote) {
         logmsg ("%s: conn_data->remote is not NULL and should not be",
                 __FUNCTION__);
         free (conn_data->remote);
     }
-
 
     if (!destination) {
         logmsg ("%s: destination is NULL and should not be", __FUNCTION__);
@@ -595,6 +635,17 @@ enable_client_side_ssl_flag(char *packet)
     memcpy ((void *) ptr, &client_capabilities, sizeof(uint16_t));
 }
 
+void
+set_packet_seq(char *packet, uint8_t n)
+{
+    uint8_t seqnr;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE - 1;
+    memcpy (&seqnr, (void *)ptr, sizeof(uint8_t));
+    seqnr = n;
+    memcpy ((void *)ptr, &seqnr, sizeof(uint8_t));
+}
+
 
 void
 decrement_packet_seq(char *packet)
@@ -649,8 +700,14 @@ void send_mysql_error(struct conn_data* conn_data, const char* fmt, ...)
 
     if (conn_data->ssl) {
         increment_packet_seq(buf);
+        //set_packet_seq(buf, 2);
         SSL_write(conn_data->ssl, buf, buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
         flush_ssl(conn_data);
+
+        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+            free (shutdown);
+        }
     } else {
         uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
         uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));

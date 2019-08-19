@@ -23,6 +23,8 @@ char *ssl_max_proto = NULL;
 int verbose = 0;
 char *mysqltype = NULL;
 int geoip = 0;
+char *external_lookup = NULL;
+int external_lookup_timeout = 2000;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -107,12 +109,14 @@ main (int ac, char *av[])
         {"ssl-max-proto", required_argument, 0, 0},
         {"geoip", required_argument, 0, 'g'},
         {"verbose", no_argument, 0, 'v'},
+        {"ext", required_argument, 0, 'E'},
+        {"ext-timeout", required_argument, 0, 0},
         {0, 0, 0, 0}
     };
 
 
     while ((ch =
-            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:Lg:v", long_options,
+            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:Lg:vE:", long_options,
                          &option_index)) != -1) {
         switch (ch) {
         case 0:
@@ -133,6 +137,10 @@ main (int ac, char *av[])
                 ssl_min_proto = strdup(optarg);
             if (strcmp (long_options[option_index].name, "ssl-max-proto") == 0)
                 ssl_max_proto = strdup(optarg);
+            if (strcmp (long_options[option_index].name, "ext") == 0)
+                external_lookup = strdup(optarg);
+            if (strcmp (long_options[option_index].name, "ext-timeout") == 0)
+                external_lookup_timeout = atoi(optarg);
             break;
 
         case 'b':
@@ -235,8 +243,10 @@ main (int ac, char *av[])
         case 'v':
             verbose = 1;
             break;
+        case 'E':
+            external_lookup = strdup(optarg);
+            break;
         }
-
     }
 
     /* if mysql module is enabled, open cdb file and create EV_SIGNAL event which call repoen_cdb().
@@ -252,6 +262,11 @@ main (int ac, char *av[])
 
     if (postgresql_cdb_file) {
         init_postgresql_cdb_file (mysqltype);
+    }
+
+    if (curl_global_init(CURL_GLOBAL_ALL)) {
+        fprintf(stderr, "Could not init curl\n");
+        return 1;
     }
 
     SSL_library_init();
@@ -454,7 +469,12 @@ usage ()
          "--ssl-max-proto proto (default tls1.2)"
          "\n\t"
          "-g /path/to/GeoLite2-Country.mmdb - enable ip/geoip protection (with -M|-P)"
-         "\n\n", SSL_CIPHERS);
+         "\n\t"
+         "--ext https://domain.com/.../%%s - additional lookup via https for data if not found in cdb (-M|-P), %%s is replaced by login from client"
+         "\n\t"
+         "--ext-timeout timeoutms - curl timeout for ext request"
+         "\n\n"
+         , SSL_CIPHERS);
     exit (-1);
 }
 
