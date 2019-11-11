@@ -1,7 +1,10 @@
 #include "rum.h"
 
-extern char *external_lookup;
+extern bool external_lookup;
+extern char *external_lookup_url;
+extern char *external_lookup_userpwd;
 extern int external_lookup_timeout;
+extern char *mysqltype;
 
 typedef struct curl_context_s {
   uv_poll_t poll_handle;
@@ -11,7 +14,7 @@ typedef struct curl_context_s {
 
 /* like get_data_from_mysql() in mysql_cdb.c */
 void
-get_data_from_curl (int external_data_len, char *external_data, char *user, int user_len, char **mysql_server,
+get_data_from_curl (int external_data_len, const char *external_data, char *user, int user_len, char **mysql_server,
                    char **mysql_password, ip_mask_pair_t** allowed_ips,
                    geo_country_t** allowed_countries)
 {
@@ -204,9 +207,10 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdat
     struct conn_data *conn_data = (struct conn_data *) userdata;
 
     if (!conn_data->mitm->data) {
-        conn_data->mitm->data = calloc(nmemb, size);
-        memcpy(conn_data->mitm->data, ptr, nmemb*size);
+        conn_data->mitm->data = calloc(nmemb, size+1);
+        memcpy(conn_data->mitm->data, ptr, nmemb*(size+1));
         conn_data->mitm->data_len = size*nmemb;
+        conn_data->mitm->data[conn_data->mitm->data_len+1] = '\0';
     } else {
         conn_data->mitm->data = reallocarray(conn_data->mitm->data, nmemb, size);
         if (!conn_data->mitm->data) {
@@ -240,11 +244,13 @@ void make_curl_request(struct conn_data *conn_data, char *user) {
     curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, conn_data->mitm->curl_errorbuf); 
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(handle, CURLOPT_WRITEDATA, conn_data);
-    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 0);
-    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0);
+    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 1);
     curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, external_lookup_timeout);
+    curl_easy_setopt(handle, CURLOPT_USERPWD, external_lookup_userpwd);
+    curl_easy_setopt(handle, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 
-    snprintf(url, sizeof(url), external_lookup, user);
+    snprintf(url, sizeof(url), external_lookup_url, mysqltype, user);
     curl_easy_setopt(handle, CURLOPT_URL, url);
     curl_easy_setopt(handle, CURLOPT_USERAGENT, "rum");
 

@@ -35,6 +35,8 @@
 #include <openssl/err.h>
 
 #include <curl/curl.h>
+#include <json-c/json.h>
+#include <confuse.h>
 
 /* AES256-SHA is needed for mysql-client-core-5.7 which is using yassl */
 #define SSL_CIPHERS "EECDH+AESGCM:EDH+AESGCM:EECDH+AES256:EDH+AES256:AES256-SHA:ECDHE+AES128:EDH+AES128"
@@ -314,7 +316,7 @@ void on_write_nofree (uv_write_t * req, int status);
 
 
 /* curl.c */
-void get_data_from_curl (int external_data_len, char *external_data, char *user, int user_len, char **mysql_server,
+void get_data_from_curl (int external_data_len, const char *external_data, char *user, int user_len, char **mysql_server,
                    char **mysql_password, ip_mask_pair_t** allowed_ips,
                    geo_country_t** allowed_countries);
 void make_curl_request(struct conn_data *conn_data, char *user);

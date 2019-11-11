@@ -2,7 +2,7 @@ CC=clang
 LD=clang
 
 #LDFLAGS=-flto
-LDLIBS=-luv -lrt -lcdb -lm -lpthread -ldl -lcrypto -lssl -lmaxminddb -lcurl
+LDLIBS=-luv -lrt -lcdb -lm -lpthread -ldl -lcrypto -lssl -lmaxminddb -lcurl -ljson-c -lconfuse
 CFLAGS=-Wall -Wextra -Wno-unused-parameter -march=sandybridge -O2 -flto -g
 LDFLAGS=-Wall -Wextra -march=sandybridge -O2 -flto -fuse-linker-plugin -g
 

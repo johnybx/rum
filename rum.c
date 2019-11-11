@@ -23,7 +23,9 @@ char *ssl_max_proto = NULL;
 int verbose = 0;
 char *mysqltype = NULL;
 int geoip = 0;
-char *external_lookup = NULL;
+bool external_lookup = false;
+char *external_lookup_url = NULL;
+char *external_lookup_userpwd = NULL;
 int external_lookup_timeout = 2000;
 
 void
@@ -43,6 +45,16 @@ main (int ac, char *av[])
     uv_signal_t *sigint;
     uv_signal_t *sigterm;
     char *pidfile = NULL;
+
+    cfg_opt_t opts[] = {
+        CFG_SIMPLE_STR("external_lookup_url", &external_lookup_url),
+        CFG_SIMPLE_STR("external_lookup_userpwd", &external_lookup_userpwd),
+        CFG_END()
+    };
+    cfg_t *cfg;
+
+	cfg = cfg_init(opts, 0);
+	cfg_parse(cfg, "/etc/rum.conf");
 
     struct destination *destination = NULL;
     struct listener *listener;
@@ -116,7 +128,7 @@ main (int ac, char *av[])
 
 
     while ((ch =
-            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:Lg:vE:", long_options,
+            getopt_long (ac, av, "bd:s:m:l:M:P:t:r:f:R:p:Lg:vE", long_options,
                          &option_index)) != -1) {
         switch (ch) {
         case 0:
@@ -138,7 +150,7 @@ main (int ac, char *av[])
             if (strcmp (long_options[option_index].name, "ssl-max-proto") == 0)
                 ssl_max_proto = strdup(optarg);
             if (strcmp (long_options[option_index].name, "ext") == 0)
-                external_lookup = strdup(optarg);
+                external_lookup = true;
             if (strcmp (long_options[option_index].name, "ext-timeout") == 0)
                 external_lookup_timeout = atoi(optarg);
             break;
@@ -244,7 +256,7 @@ main (int ac, char *av[])
             verbose = 1;
             break;
         case 'E':
-            external_lookup = strdup(optarg);
+            external_lookup = true;
             break;
         }
     }

@@ -11,7 +11,8 @@ extern int cache_mysql_init_packet_len;
 extern struct destination *first_destination;
 extern int loglogins;
 extern int geoip;
-extern char *external_lookup;
+extern bool external_lookup;
+extern char *external_lookup_url;
 
 /* initialize struct mitm */
 struct mitm *
@@ -262,10 +263,23 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
     if (geoip && conn_data->stream->type == UV_TCP) {
         ip_mask_pair_t* allowed_ips = NULL;
         geo_country_t* allowed_countries = NULL;
+
         if (conn_data->mitm->data && conn_data->mitm->data_len) {
-            get_data_from_curl (conn_data->mitm->data_len, conn_data->mitm->data,
-                                    user, user_len, &mysql_server,
-                                    &conn_data->mitm->password, &allowed_ips, &allowed_countries);
+            /* decode json and use that data as cdb value */
+            struct json_object *jobj = json_tokener_parse(conn_data->mitm->data);
+
+            if (jobj) {
+                int data_len=json_object_get_string_len(jobj);
+                const char *data = json_object_get_string(jobj);
+
+                get_data_from_curl (data_len, data,
+                                        user, user_len, &mysql_server,
+                                        &conn_data->mitm->password, &allowed_ips, &allowed_countries);
+
+                json_object_put(jobj);
+            } else {
+                logmsg("cannot decode json from str (%s)", conn_data->mitm->data);
+            }
 
         } else {
             get_data_from_cdb (user, user_len, &mysql_server,
@@ -339,7 +353,7 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
     if (mysql_server != NULL) {
         destination = add_destination(mysql_server);
     } else {
-        if (external_lookup && !conn_data->mitm->curl_handle) {
+        if (external_lookup && external_lookup_url && !conn_data->mitm->curl_handle) {
             uv_read_stop(conn_data->stream);
             make_curl_request(conn_data, user);
             return 1;

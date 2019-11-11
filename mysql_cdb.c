@@ -51,13 +51,13 @@ init_mysql_cdb_file (char *type)
             memcpy (cache_mysql_init_packet, MARIADB55_INIT_PACKET,
                     sizeof (MARIADB55_INIT_PACKET) - 1);
             cache_mysql_init_packet_len = sizeof (MARIADB55_INIT_PACKET) - 1;
-        } else if (!strcmp (type, "mariadb10.1")) {
+        } else if (!strcmp (type, "mariadb10.1") || !strcmp (type, "mariadb101")) {
             cache_mysql_init_packet =
                 malloc (sizeof (MARIADB10_1_INIT_PACKET) - 1);
             memcpy (cache_mysql_init_packet, MARIADB10_1_INIT_PACKET,
                     sizeof (MARIADB10_1_INIT_PACKET) - 1);
             cache_mysql_init_packet_len = sizeof (MARIADB10_1_INIT_PACKET) - 1;
-        } else if (!strcmp (type, "mariadb10.3")) {
+        } else if (!strcmp (type, "mariadb10.3") || !strcmp (type, "mariadb103")) {
             cache_mysql_init_packet =
                 malloc (sizeof (MARIADB10_3_INIT_PACKET) - 1);
             memcpy (cache_mysql_init_packet, MARIADB10_3_INIT_PACKET,
