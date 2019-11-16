@@ -54,7 +54,7 @@ main (int ac, char *av[])
     cfg_t *cfg;
 
 	cfg = cfg_init(opts, 0);
-	cfg_parse(cfg, "/etc/rum.conf");
+	cfg_parse(cfg, "/etc/rum/rum.conf");
 
     struct destination *destination = NULL;
     struct listener *listener;
