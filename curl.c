@@ -5,12 +5,18 @@ extern char *external_lookup_url;
 extern char *external_lookup_userpwd;
 extern int external_lookup_timeout;
 extern char *mysqltype;
+static struct hsearch_data htab;
+extern cfg_bool_t external_lookup_cache;
+extern long int external_lookup_cache_flush;
+static struct ll_hsearch_data *mainll = NULL;
 
 typedef struct curl_context_s {
   uv_poll_t poll_handle;
   curl_socket_t sockfd;
   struct conn_data *conn_data;
 } curl_context_t;
+
+static uv_timer_t flush_cache_timer;
 
 /* like get_data_from_mysql() in mysql_cdb.c */
 void
@@ -58,6 +64,9 @@ static void check_multi_info(struct conn_data *conn_data)
       uv_buf.base = conn_data->mitm->client_auth_packet;
       uv_buf.len = conn_data->mitm->client_auth_packet_len;
       if (code == 200 && conn_data->mitm->data_len) {
+        if (external_lookup_cache == cfg_true) {
+            add_data_to_cache(conn_data->mitm->user, conn_data->mitm->data);
+        }
         handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
       } else {
         if (conn_data->mitm->curl_errorbuf) {
@@ -223,9 +232,127 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdat
     return size*nmemb;
 }
 
+
+static void callback_flush_cache(uv_timer_t *req) {
+    //logmsg ("flushing curl cache");
+    hdestroy_r(&htab);
+    ll_free();
+    if (!hcreate_r(8192, &htab)) {
+        logmsg("hcreate failed: %s", strerror (errno));
+        exit(1);
+    }
+}
+
+void init_curl_cache() {
+    if (!hcreate_r(8192, &htab)) {
+        logmsg("hcreate failed: %s", strerror (errno));
+        exit(1);
+    }
+
+    uv_timer_init(uv_default_loop(), &flush_cache_timer);
+    uv_timer_start(&flush_cache_timer, callback_flush_cache, external_lookup_cache_flush*1000, external_lookup_cache_flush*1000);
+}
+
+void free_curl_cache() {
+    uv_timer_stop(&flush_cache_timer);
+
+    hdestroy_r(&htab);
+    ll_free();
+}
+
+char *ll_strdup(char *s) {
+    struct ll_hsearch_data *ll;
+
+    ll = calloc(1, sizeof(struct ll_hsearch_data));
+
+    if (!ll) {
+        logmsg("calloc failed");
+        return NULL;
+    }
+
+    if (mainll == NULL) {
+        mainll = ll;
+    } else {
+        ll->next = mainll;
+        mainll = ll;
+    }
+
+    ll->data = strdup(s);
+
+    return ll->data;
+}
+
+void ll_free() {
+    struct ll_hsearch_data *ll=NULL, *prev=NULL;
+
+    for (ll = mainll; ll; ll = ll->next) {
+        free(ll->data);
+        if (prev) {
+            free(prev);
+        }
+        prev = ll;
+    }
+
+    if (prev) {
+        free(prev);
+    }
+    mainll = NULL;
+}
+
+void add_data_to_cache(char *user, char *data) {
+    int ret;
+
+    ENTRY e, *ep;
+
+    
+    e.key = ll_strdup(user);
+    e.data = ll_strdup(data);
+
+    ret = hsearch_r(e, FIND, &ep, &htab);
+    if (!ret && !ep) {
+        ret = hsearch_r(e, ENTER, &ep, &htab);
+        if (!ret) {
+            logmsg("hsearch ENTER failed (%s)", strerror (errno));
+        }
+    }
+
+    return;
+}
+
+char *get_data_from_cache(char *user) {
+    int ret;
+
+    ENTRY e, *ep;
+
+    e.key = user;
+    ret = hsearch_r(e, FIND, &ep, &htab);
+
+    if (ret && ep) {
+        return (char *) ep->data;
+    }
+
+    return NULL;
+}
+
 void make_curl_request(struct conn_data *conn_data, char *user) {
     char url[256];
     CURL *handle;
+
+    if (external_lookup_cache == cfg_true) {
+        char *cached = get_data_from_cache(user);
+        if (cached) {
+            logmsg("found user %s in curl cache", conn_data->mitm->user);
+            conn_data->mitm->data = cached;
+            conn_data->mitm->data_len = strlen(cached);
+
+            uv_buf_t uv_buf;
+            uv_buf.base = conn_data->mitm->client_auth_packet;
+            uv_buf.len = conn_data->mitm->client_auth_packet_len;
+    
+            handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
+            return;
+        }
+    }
 
     conn_data->mitm->curl_timer = malloc (sizeof (uv_timer_t));
     uv_timer_init(uv_default_loop(), conn_data->mitm->curl_timer);
@@ -254,5 +381,6 @@ void make_curl_request(struct conn_data *conn_data, char *user) {
     curl_easy_setopt(handle, CURLOPT_URL, url);
     curl_easy_setopt(handle, CURLOPT_USERAGENT, "rum");
 
+    logmsg("making curl external lookup %s", url);
     curl_multi_add_handle(conn_data->mitm->curl_handle, handle);
 }

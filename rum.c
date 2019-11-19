@@ -27,6 +27,8 @@ bool external_lookup = false;
 char *external_lookup_url = NULL;
 char *external_lookup_userpwd = NULL;
 int external_lookup_timeout = 2000;
+cfg_bool_t external_lookup_cache = cfg_false;
+long int external_lookup_cache_flush = 3;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -49,6 +51,8 @@ main (int ac, char *av[])
     cfg_opt_t opts[] = {
         CFG_SIMPLE_STR("external_lookup_url", &external_lookup_url),
         CFG_SIMPLE_STR("external_lookup_userpwd", &external_lookup_userpwd),
+        CFG_SIMPLE_BOOL("external_lookup_cache", &external_lookup_cache),
+        CFG_SIMPLE_INT("external_lookup_cache_flush", &external_lookup_cache_flush),
         CFG_END()
     };
     cfg_t *cfg;
@@ -281,6 +285,10 @@ main (int ac, char *av[])
         return 1;
     }
 
+    if (external_lookup_cache == cfg_true) {
+        init_curl_cache();
+    }
+
     SSL_library_init();
     SSL_load_error_strings();
     OpenSSL_add_ssl_algorithms();
@@ -407,6 +415,8 @@ main (int ac, char *av[])
         }
     }
 
+    /* flush curl cache every hour */
+
     /* main libuv loop */
     uv_run (uv_default_loop (), UV_RUN_DEFAULT);
 
@@ -434,6 +444,10 @@ main (int ac, char *av[])
 
     SSL_CTX_free(ctx);
     SSL_CTX_free(client_ctx);
+
+    if (external_lookup_cache == cfg_true) {
+        free_curl_cache();
+    }
 
     free (sigint);
     free (sigterm);
