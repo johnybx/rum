@@ -69,6 +69,9 @@ static void check_multi_info(struct conn_data *conn_data)
         }
         handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
       } else {
+        if (code == 404) {
+            add_data_to_cache(conn_data->mitm->user, NULL);
+        }
         if (conn_data->mitm->curl_errorbuf) {
             logmsg ("curl request for %s failed, code: %ld error: %s", done_url, code, conn_data->mitm->curl_errorbuf);
         }
@@ -286,7 +289,9 @@ void ll_free() {
     struct ll_hsearch_data *ll=NULL, *prev=NULL;
 
     for (ll = mainll; ll; ll = ll->next) {
-        free(ll->data);
+        if (ll->data) {
+            free(ll->data);
+        }
         if (prev) {
             free(prev);
         }
@@ -304,9 +309,13 @@ void add_data_to_cache(char *user, char *data) {
 
     ENTRY e, *ep;
 
-    
     e.key = ll_strdup(user);
-    e.data = ll_strdup(data);
+
+    if (data) {
+        e.data = ll_strdup(data);
+    } else {
+        e.data = NULL;
+    }
 
     ret = hsearch_r(e, FIND, &ep, &htab);
     if (!ret && !ep) {
