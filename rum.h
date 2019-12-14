@@ -39,6 +39,8 @@
 #include <confuse.h>
 #include <search.h>
 
+#define SSL_BUFSIZE 16384
+
 /* AES256-SHA is needed for mysql-client-core-5.7 which is using yassl */
 #define SSL_CIPHERS "EECDH+AESGCM:EDH+AESGCM:EECDH+AES256:EDH+AES256:AES256-SHA:ECDHE+AES128:EDH+AES128"
 //#define SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
@@ -206,6 +208,7 @@ int get_num_fds ();
 struct destination *add_destination (char *ptr);
 void randomize_destinations (void);
 void shuffle (struct destination **array, size_t n);
+void free_pending_ll(struct pending *pending);
 
 /* socket.c */
 void on_shutdown (uv_shutdown_t * shutdown, int status);
@@ -222,7 +225,7 @@ void on_incoming_connection (uv_stream_t * server, int status);
 void prepare_upstream (char *wwtf, struct destination *destination);
 void failover (struct conn_data *bev_target);
 int flush_ssl(struct conn_data *conn_data);
-size_t handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf);
+struct pending *handle_ssl (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf);
 int enable_server_ssl (struct conn_data *conn_data);
 int enable_server_ssl_mysql (struct conn_data *conn_data, const uv_buf_t * uv_buf, size_t nread);
 int enable_client_ssl (struct conn_data *conn_data);

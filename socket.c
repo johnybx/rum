@@ -562,46 +562,79 @@ enable_server_ssl_mysql (struct conn_data *conn_data,
 }
 
 /*
- * read incoming ssl data from buf->base and replace it with unencrypted in buf->base
+ * read incoming ssl data from buf->base and return unencrypted data in linked-list of uv_buf_t
  */
-size_t
-handle_ssl (uv_stream_t * stream, ssize_t nread, uv_buf_t * buf)
+
+struct pending *
+handle_ssl (uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
 {
     struct conn_data *conn_data = stream->data;
-    BIO_write(conn_data->ssl_read, buf->base, nread);
+    BIO_write (conn_data->ssl_read, buf->base, nread);
+
     ssize_t readbytes = 0;
+    struct pending *p = NULL, *ptr = NULL;
+    uv_buf_t *newbuf = NULL;
     while (1)
     {
-        /* check for enough space in uv_buf */
-        int pending = BIO_pending(conn_data->ssl_read);
-        if ((size_t) (readbytes + pending) > buf->len) {
-            buf->base = realloc(buf->base, readbytes + pending);
-            buf->len = readbytes + pending;
-        }
-        size_t read = 0;
-        int rc = SSL_read_ex(conn_data->ssl, buf->base + readbytes, pending, &read);
-        readbytes += read;
+//        int pending = BIO_pending(conn_data->ssl_read);
+        newbuf = malloc(sizeof(struct uv_buf_t));
+        newbuf->base = malloc(SSL_BUFSIZE);
+        newbuf->len = 0;
+
+        int rc = SSL_read_ex(conn_data->ssl, newbuf->base, SSL_BUFSIZE, &newbuf->len);
+
+        readbytes += newbuf->len;
         if (rc <= 0) {
+            free (newbuf->base);
+            free (newbuf);
             int error_rc = SSL_get_error(conn_data->ssl, rc);
             if (error_rc == SSL_ERROR_WANT_READ) {
                 int flushed = flush_ssl(conn_data);
                 if (flushed == 0) {
-                    return readbytes;
+                    return p;
                 } else if (flushed == -1) {
-                    return -1;
+                    // TODO
+                    free_pending_ll(p);
+                    return NULL;
                 }
+/*
+            } else if (error_rc == SSL_ERROR_SYSCALL && ERR_get_error() == 0 && errno == 0) {
+                int flushed = flush_ssl(conn_data);
+                if (flushed == 0) {
+                    return p;
+                } else if (flushed == -1) {
+                    // TODO
+                    free_pending_ll(p);
+                    return NULL;
+                }
+*/
             } else {
                 ERR_print_errors_cb(logmsg_ssl, conn_data);
                 uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
                 if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
                     free (shutdown);
                 }
+                free_pending_ll(p);
 
-                return -1;
+                return NULL;
+            }
+        } else {
+            /* append buf to ll if nonempty */
+            if (newbuf->len > 0) {
+                if (!p) {
+                    p = calloc(1, sizeof(struct pending));
+                    ptr = p;
+                } else {
+                    ptr->next = calloc(1, sizeof(struct pending));
+                    ptr = ptr->next;
+                }
+
+                ptr->buf = newbuf;
+                newbuf = NULL;
             }
         }
     }
-    return readbytes;
+    return p;
 }
 
 int flush_ssl(struct conn_data *conn_data) {
@@ -616,6 +649,7 @@ int flush_ssl(struct conn_data *conn_data) {
             free (p);
         } else {
             /* TODO check here for ssl_error ? */
+            int error_rc = SSL_get_error(conn_data->ssl, rc);
             break;
         }
     }

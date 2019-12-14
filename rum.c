@@ -57,8 +57,8 @@ main (int ac, char *av[])
     };
     cfg_t *cfg;
 
-	cfg = cfg_init(opts, 0);
-	cfg_parse(cfg, "/etc/rum/rum.conf");
+    cfg = cfg_init(opts, 0);
+    cfg_parse(cfg, "/etc/rum/rum.conf");
 
     struct destination *destination = NULL;
     struct listener *listener;
@@ -449,6 +449,8 @@ main (int ac, char *av[])
         free_curl_cache();
     }
 
+    cfg_free(cfg);
+
     free (sigint);
     free (sigterm);
 
@@ -703,5 +705,30 @@ void get_ip_access_from_cdb_tail(const char* buf, unsigned int remaining,
 
             *allowed_countries = countries;
         }
+    }
+}
+
+void free_pending_ll(struct pending *pending) {
+    struct pending *prev, *ptr;
+
+    /* free pending ll & buf */
+    for (prev = NULL, ptr = pending; ptr; ptr = ptr->next) {
+        if (ptr->buf && ptr->buf->base) {
+            free(ptr->buf->base);
+            ptr->buf->base = NULL;
+        }
+        if (ptr->buf) {
+            free(ptr->buf);
+            ptr->buf = NULL;
+        }
+
+        if (prev) {
+            free(prev);
+        }
+        prev = ptr;
+    }
+
+    if (prev) {
+        free(prev);
     }
 }

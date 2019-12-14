@@ -25,18 +25,28 @@ void
 postgresql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
 {
     struct conn_data *conn_data = (struct conn_data *) stream->data;
-    uv_buf_t mybuf;
-    uv_buf_t *buf = &mybuf;
-    buf->base = constbuf->base;
-    buf->len = constbuf->len;
 
-    /* if this connection is ssl, decrypt data in buf->base */
+    uv_buf_t *buf = NULL;
+    struct pending *pending = NULL;
+
     if (conn_data->ssl && nread > 0) {
-        nread = handle_ssl(stream, nread, buf);
-        if (nread <= 0) {
-            free (buf->base);
+        pending = handle_ssl (stream, nread, constbuf);
+        free (constbuf->base);
+        if (!pending) {
             return;
         }
+
+        /* TODO: pending can contain multiple data but we throw it away, probability in this phase of connection is low */
+        nread = pending->buf->len;
+        buf = malloc(sizeof(struct uv_buf_t));
+        buf->base = pending->buf->base;
+        buf->len = pending->buf->len;
+        pending->buf->base = NULL;
+        free_pending_ll (pending);
+    } else if (!conn_data->ssl && nread > 0) {
+        buf = malloc(sizeof(struct uv_buf_t));
+        buf->base = constbuf->base;
+        buf->len = nread;
     }
 
     if (conn_data->remote || (conn_data->mitm && conn_data->mitm->not_need_remote)) {
@@ -124,4 +134,5 @@ postgresql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constb
     }
 
     free (buf->base);
+    free (buf);
 }
