@@ -1,3 +1,3 @@
-shlibs:Depends=libc6 (>= 2.15), libcdb1
+shlibs:Depends=libc6 (>= 2.26), libcdb1, libconfuse2 (>= 3.2.1~), libcurl3-gnutls (>= 7.16.3), libjemalloc2 (>= 2.1.1), libjson-c4 (>= 0.13.1), libmaxminddb0 (>= 1.0.2), libssl1.1 (>= 1.1.1), libuv1 (>= 1.7.0)
 misc:Depends=
 misc:Pre-Depends=

@@ -1,3 +1,101 @@
+rum (6.0-bionic) bionic; urgency=medium
+
+  * ssl fixes
+  * miss caching for external user lookup
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Sun, 15 Dec 2019 01:40:15 +0100
+
+rum (5.37-bionic) bionic; urgency=medium
+
+  * caching support
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Tue, 19 Nov 2019 12:00:48 +0100
+
+rum (5.36-bionic) bionic; urgency=medium
+
+  * rebuild with gcc
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Tue, 12 Nov 2019 21:45:10 +0100
+
+rum (5.35-bionic) bionic; urgency=medium
+
+  * again
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Tue, 12 Nov 2019 21:43:29 +0100
+
+rum (5.34-bionic) bionic; urgency=medium
+
+  * try again
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Tue, 12 Nov 2019 21:29:06 +0100
+
+rum (5.33-bionic) bionic; urgency=medium
+
+  * remove march=sandybridge for r98
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Tue, 12 Nov 2019 21:20:04 +0100
+
+rum (5.32-bionic) bionic; urgency=medium
+
+  * just rebuild
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Mon, 11 Nov 2019 18:07:13 +0100
+
+rum (5.31-bionic) bionic; urgency=medium
+
+  * load userpass for external lookup url from configfile
+  * use json to decode external data
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Mon, 11 Nov 2019 18:03:50 +0100
+
+rum (5.30-bionic) bionic; urgency=medium
+
+  * fix bug when client connecting using ssl and rum dont remove ssl flag from client request
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Sun, 23 Jun 2019 17:05:55 +0200
+
+rum (5.29-bionic) bionic; urgency=medium
+
+  * adding some ciphers & disabling tls1.3
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Fri, 21 Jun 2019 17:01:12 +0200
+
+rum (5.28-bionic) bionic; urgency=medium
+
+  * fix some segfaults in ssl logging/geoip
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Fri, 21 Jun 2019 16:45:29 +0200
+
+rum (5.27-bionic) bionic; urgency=medium
+
+  * geoip use mmdb & fixes
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Fri, 21 Jun 2019 15:47:16 +0200
+
+rum (5.26-bionic) bionic; urgency=medium
+
+  * logging changes
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Thu, 13 Jun 2019 00:05:28 +0200
+
+rum (5.25-bionic) bionic; urgency=medium
+
+  * fixes 
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Wed, 12 Jun 2019 20:32:10 +0200
+
+rum (5.24-bionic) bionic; urgency=medium
+
+  * fixes/changes 
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Wed, 12 Jun 2019 15:50:41 +0200
+
+rum (5.23-bionic) bionic; urgency=medium
+  
+  * ssl support
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Wed, 28 Nov 2018 16:14:19 +0100
+
 rum (3.9-xenial) xenial; urgency=medium
 
   * do not fail when cdb file not yet exists

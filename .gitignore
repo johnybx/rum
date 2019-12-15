@@ -1,4 +1,9 @@
 build/
+build-tree/
+debian/build-tree/
+debian/install-tree/
+debian/tmp/
+debian/rum/
 cmake-build*/
 
 .idea

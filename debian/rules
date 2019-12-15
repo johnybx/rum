@@ -13,21 +13,17 @@
 # Uncomment this to turn on verbose mode.
 export DH_VERBOSE=1
 
-# This has to be exported to make some magic below work.
-export DH_OPTIONS
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_BUILD_OPTIONS = nostrip
+
 BUILD_DIR=debian/build-tree
-INSTALL_DIR_RELATIVE=install-tree
+INSTALL_DIR_RELATIVE=tmp
 INSTALL_DIR=debian/$(INSTALL_DIR_RELATIVE)
 LSB_RELEASE := $(shell lsb_release -i -s)
 
-
-all: build
-
-
-install: all
-
 %:
 	dh $@ 
+
 clean:
 	rm -rf $(BUILD_DIR)/*
 	rm -rf $(INSTALL_DIR)/*
@@ -36,19 +32,22 @@ clean:
 build: 
 	set -ex 
 	mkdir -p "$(BUILD_DIR)"
-	cp -a `find . -maxdepth 1 -mindepth 1 -not -name debian` $(BUILD_DIR)
+	cp -a `find . -maxdepth 1 -mindepth 1 -not -name debian -and -not -name .git` $(BUILD_DIR)
 	dh_auto_build -D "$(BUILD_DIR)" -- -j`nproc`
 	dh_auto_install -D "$(BUILD_DIR)" -- -j1 
 	install -m 700 $(BUILD_DIR)/rum -D $(INSTALL_DIR)/usr/sbin/rum
 	install -m 644 $(BUILD_DIR)/contrib/rum.defaults -D $(INSTALL_DIR)/etc/default/rum
 
-override_dh_install-arch:
-	cd debian && test -L tmp || ln -s $(INSTALL_DIR_RELATIVE) tmp
-	dh_install -a --list-missing
-	dh_installlogrotate
+#override_dh_install-arch:
+#	cd debian && test -L tmp || ln -s $(INSTALL_DIR_RELATIVE) tmp
+#	dh_install -a --list-missing
+#	dh_installlogrotate
 
 override_dh_installinit:
 	dh_installinit -R
 
-override_dh_strip:
-	echo kokocina
+override_dh_installdocs:
+	dh_installdocs README.md
+
+override_dh_shlibdeps:
+	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
