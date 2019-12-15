@@ -31,27 +31,28 @@ mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
     uv_buf_t *buf = NULL;
     struct pending *pending = NULL;
 
-    if (conn_data->ssl && nread > 0) {
-        pending = handle_ssl(stream, nread, constbuf);
-        free (constbuf->base);
-        if (!pending) {
-            return;
+    if (conn_data->remote || (conn_data->mitm && conn_data->mitm->not_need_remote)) {
+        if (conn_data->ssl && nread > 0) {
+            pending = handle_ssl(stream, nread, constbuf);
+            free (constbuf->base);
+            if (!pending) {
+                return;
+            }
+
+            /* TODO: pending can contain multiple data but we throw it away, probability in this phase of connection is low */
+            nread = pending->buf->len;
+            buf = malloc(sizeof(struct uv_buf_t));
+            buf->base = pending->buf->base;
+            buf->len = pending->buf->len;
+            pending->buf->base = NULL;
+            free_pending_ll (pending);
+        } else if (!conn_data->ssl && nread > 0) {
+            buf = malloc(sizeof(struct uv_buf_t));
+            buf->base = constbuf->base;
+            buf->len = nread;
         }
 
-        /* TODO: pending can contain multiple data but we throw it away, probability in this phase of connection is low */
-        nread = pending->buf->len;
-        buf = malloc(sizeof(struct uv_buf_t));
-        buf->base = pending->buf->base;
-        buf->len = pending->buf->len;
-        pending->buf->base = NULL;
-        free_pending_ll (pending);
-    } else if (!conn_data->ssl && nread > 0) {
-        buf = malloc(sizeof(struct uv_buf_t));
-        buf->base = constbuf->base;
-        buf->len = nread;
-    }
 
-    if (conn_data->remote || (conn_data->mitm && conn_data->mitm->not_need_remote)) {
         if (nread > 0) {
             if (conn_data->type == CONN_CLIENT) {
                 conn_data->listener->input_bytes += nread;
@@ -124,6 +125,10 @@ mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
         }
     }
 
-    free (buf->base);
-    free (buf);
+    if (buf) {
+        free (buf->base);
+        free (buf);
+    } else {
+        free (constbuf->base);
+    }
 }
