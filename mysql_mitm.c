@@ -220,8 +220,8 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
             free (shutdown);
         }
 
-        logmsg ("%s: warning: invalid client packet size (packet too small)",
-                __FUNCTION__);
+        logmsg ("%s: warning: invalid client packet size (packet too small) from %s%s",
+                __FUNCTION__, get_ipport (conn_data), get_sslinfo (conn_data));
         return 1;
     }
 
@@ -246,8 +246,8 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         }
 
         logmsg
-            ("%s: warning: invalid client packet size (user_len > sizeof(user)-1)",
-             __FUNCTION__);
+            ("%s: warning: invalid client packet size (user_len > sizeof(user)-1) from %s%s",
+             __FUNCTION__, get_ipport (conn_data), get_sslinfo (conn_data));
 
         return 1;
 
@@ -344,8 +344,8 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
             free (shutdown);
         }
 
-        logmsg ("%s: invalid client packet size (packet too small 2)",
-                __FUNCTION__);
+        logmsg ("%s: invalid client packet size (packet too small 2) from %s%s",
+                __FUNCTION__, get_ipport (conn_data), get_sslinfo (conn_data));
 
         return 1;
     }
