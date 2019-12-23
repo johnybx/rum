@@ -335,7 +335,7 @@ main (int ac, char *av[])
     SSL_CTX_set_options(ctx, flags);
     SSL_CTX_set_cipher_list(ctx, ssl_ciphers);
     SSL_CTX_set_ecdh_auto(ctx, 1);
-    SSL_CTX_set_session_id_context(ctx, "rum", 3);
+    SSL_CTX_set_session_id_context(ctx, (const unsigned char *)"rum", 3);
 
     if (ssl_cert) {
         if (SSL_CTX_use_certificate_chain_file(ctx, ssl_cert) <= 0) {
