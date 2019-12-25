@@ -1,3 +1,9 @@
+rum (6.2-bionic) bionic; urgency=medium
+
+  * fix handling mysql init packet over ssl when client sent data in multiple ssl records
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Wed, 25 Dec 2019 13:16:23 +0100
+
 rum (6.1-bionic) bionic; urgency=medium
 
   * log ip for invalid packet sizes
