@@ -29,6 +29,7 @@ char *external_lookup_userpwd = NULL;
 int external_lookup_timeout = 2000;
 cfg_bool_t external_lookup_cache = cfg_false;
 long int external_lookup_cache_flush = 3;
+struct this_rackunit_ips *this_rackunit_ips = NULL;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -42,7 +43,7 @@ main (int ac, char *av[])
 {
     int ret, ch;
     char *logfile = NULL;
-    int i, ok;
+    unsigned int i, ok;
     char *tmp, *ptr;
     uv_signal_t *sigint;
     uv_signal_t *sigterm;
@@ -53,6 +54,7 @@ main (int ac, char *av[])
         CFG_SIMPLE_STR("external_lookup_userpwd", &external_lookup_userpwd),
         CFG_SIMPLE_BOOL("external_lookup_cache", &external_lookup_cache),
         CFG_SIMPLE_INT("external_lookup_cache_flush", &external_lookup_cache_flush),
+        CFG_STR_LIST("this_rackunit_ips", NULL, CFGF_NONE),
         CFG_END()
     };
     cfg_t *cfg;
@@ -287,6 +289,22 @@ main (int ac, char *av[])
 
     if (external_lookup_cache == cfg_true) {
         init_curl_cache();
+    }
+
+    struct this_rackunit_ips *trip = NULL;
+    if (cfg_size(cfg, "this_rackunit_ips")) {
+        for(i = 0; i < cfg_size(cfg, "this_rackunit_ips"); i++) {
+            if (!trip) {
+                this_rackunit_ips = malloc(sizeof(struct this_rackunit_ips));
+                trip = this_rackunit_ips;
+                trip ->next = NULL;
+            } else {
+                trip ->next = malloc(sizeof(struct this_rackunit_ips));
+                trip = trip->next;
+                trip ->next = NULL;
+            }
+            trip ->ip = cfg_getnstr(cfg, "this_rackunit_ips", i);
+        }
     }
 
     SSL_library_init();
@@ -651,6 +669,32 @@ bool ip_in_networks(uint32_t ip, ip_mask_pair_t* networks)
         uint32_t end = start | ~network->mask;
 
         if (ip >= start && ip <= end) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool is_this_rackunit(const char *mysql_server) {
+    #define INET_PORTSTRLEN 6
+    char ip[INET6_ADDRSTRLEN],port[INET_PORTSTRLEN];
+    int ret = 0;
+
+    if (!this_rackunit_ips) {
+        return false;
+    }
+
+    ret = sscanf(mysql_server, "tcp:%" EXPAND(INET6_ADDRSTRLEN) "[0-9.]:%" EXPAND(INET_PORTSTRLEN) "[0-9]", ip, port);
+
+    if (ret!=2) {
+        logmsg("cannot parse mysql_server: %s", mysql_server);
+        return false;
+    }
+
+    struct this_rackunit_ips *trip;
+    for (trip = this_rackunit_ips; trip; trip=trip->next) {
+        if (!strcmp(trip->ip, ip)) {
             return true;
         }
     }

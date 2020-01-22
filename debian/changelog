@@ -1,3 +1,9 @@
+rum (6.3-bionic) bionic; urgency=medium
+
+  * detect when rum get local rackunit ip from api and drop connection to avoid loop
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Wed, 22 Jan 2020 13:37:00 +0100
+
 rum (6.2-bionic) bionic; urgency=medium
 
   * fix handling mysql init packet over ssl when client sent data in multiple ssl records

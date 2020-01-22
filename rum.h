@@ -41,6 +41,9 @@
 
 #define SSL_BUFSIZE 16384
 
+#define STR(x) #x
+#define EXPAND(x) STR(x)
+
 /* AES256-SHA is needed for mysql-client-core-5.7 which is using yassl */
 #define SSL_CIPHERS "EECDH+AESGCM:EDH+AESGCM:EECDH+AES256:EDH+AES256:AES256-SHA:ECDHE+AES128:EDH+AES128"
 //#define SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
@@ -153,6 +156,12 @@ struct pending
     struct pending *next;
 };
 
+struct this_rackunit_ips
+{
+    char *ip;
+    struct this_rackunit_ips *next;
+};
+
 /* if we use cdb database we need to store some information from client or server and process it */
 struct mitm
 {
@@ -209,6 +218,7 @@ struct destination *add_destination (char *ptr);
 void randomize_destinations (void);
 void shuffle (struct destination **array, size_t n);
 void free_pending_ll(struct pending *pending);
+bool is_this_rackunit(const char *mysql_server);
 
 /* socket.c */
 void on_shutdown (uv_shutdown_t * shutdown, int status);

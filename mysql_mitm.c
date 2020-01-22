@@ -351,6 +351,16 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
     }
 
     if (mysql_server != NULL) {
+        if (conn_data->mitm->data && conn_data->mitm->data_len && is_this_rackunit(mysql_server)) {
+            logmsg ("ext api set mysql_server this rackunit (%s) for user %s from %s%s", mysql_server, user, get_ipport (conn_data), get_sslinfo (conn_data));
+
+            send_mysql_error(conn_data, "Access denied, loop detected");
+
+            if (mysql_server)
+                free (mysql_server);
+
+            return 1;
+        }
         destination = add_destination(mysql_server);
     } else {
         if (external_lookup && external_lookup_url && !conn_data->mitm->curl_handle) {

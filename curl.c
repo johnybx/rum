@@ -27,9 +27,8 @@ get_data_from_curl (int external_data_len, const char *external_data, char *user
     *mysql_password = strdup (external_data);
     *mysql_server = strdup (external_data + strlen (*mysql_password) + 1);
 
-
     unsigned int read = strlen(*mysql_password) + strlen(*mysql_server) + 2;
-    unsigned int remaining = external_data_len - read;
+    int remaining = external_data_len - read;
 
     if (remaining >= 1 && allowed_ips && allowed_countries) {
         get_ip_access_from_cdb_tail(&external_data[read], remaining, allowed_ips, allowed_countries);
