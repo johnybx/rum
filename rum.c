@@ -311,19 +311,11 @@ main (int ac, char *av[])
     SSL_load_error_strings();
     OpenSSL_add_ssl_algorithms();
 
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L) && !defined(LIBRESSL_VERSION_NUMBER)  && !defined(OPENSSL_IS_BORINGSSL)
     client_ctx = SSL_CTX_new(TLS_client_method());
-#else
-    client_ctx = SSL_CTX_new(SSLv23_client_method());
-#endif
     SSL_CTX_set_session_cache_mode(client_ctx, SSL_SESS_CACHE_CLIENT);
     SSL_CTX_set_cipher_list(client_ctx, ssl_ciphers);
 
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L) && !defined(LIBRESSL_VERSION_NUMBER)  && !defined(OPENSSL_IS_BORINGSSL)
     ctx = SSL_CTX_new(TLS_server_method());
-#else
-    ctx = SSL_CTX_new(SSLv23_server_method());
-#endif
     const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE;
     if (ssl_min_proto) {
         if (strcmp(ssl_min_proto, "ssl3") == 0) {
@@ -334,10 +326,8 @@ main (int ac, char *av[])
             SSL_CTX_set_min_proto_version(ctx, TLS1_1_VERSION);
         } else if (strcmp(ssl_min_proto, "tls1.2") == 0) {
             SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-#ifdef TLS1_3_VERSION
         }else if (strcmp(ssl_min_proto, "tls1.3") == 0) {
             SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
-#endif
         }
     } else {
         SSL_CTX_set_min_proto_version(ctx, TLS1_VERSION);
@@ -352,10 +342,8 @@ main (int ac, char *av[])
             SSL_CTX_set_max_proto_version(ctx, TLS1_1_VERSION);
         } else if (strcmp(ssl_max_proto, "tls1.2") == 0) {
             SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
-#ifdef TLS1_3_VERSION
         } else if (strcmp(ssl_max_proto, "tls1.3") == 0) {
             SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
-#endif
         }
     } else {
         /* tls1.3 not working with mariadb-client-core-10.3, not sure why, use default max tls1.2 */
