@@ -51,9 +51,9 @@ do_start()
 	do
 		export PIDFILE=/var/run/${instance%%:*}.pid
 		DAEMON_ARGS=${instance#*:}
-			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
+			start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 				||  log_warning_msg "daemon was already running"
-			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- \
+			start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- \
 				$DAEMON_ARGS \
 				|| log_failure_msg "daemon could not be started"
 		# Add code here, if necessary, that waits for the process to be ready
@@ -126,7 +126,7 @@ do_reload() {
 			unset PID
 			fi
 			# start not running process
-			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
+			start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
 			continue
 		elif [ "$DAEMON $DAEMON_ARGS" != "$PROCESS_ARGS" ]; then
 			log_daemon_msg "Reloading $DESC" "${instance%%:*}"
@@ -136,7 +136,7 @@ do_reload() {
 			[ -f $PIDFILE ] && rm -f $PIDFILE
 			
 			# start process
-			start-stop-daemon --start --quiet -N -20 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
+			start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_ARGS 
 		fi
 	done
 	return 0
