@@ -4,7 +4,7 @@ extern bool external_lookup;
 extern char *external_lookup_url;
 extern char *external_lookup_userpwd;
 extern int external_lookup_timeout;
-extern char *mysqltype;
+extern char *dbtype;
 static struct hsearch_data htab;
 extern cfg_bool_t external_lookup_cache;
 extern long int external_lookup_cache_flush;
@@ -385,7 +385,7 @@ void make_curl_request(struct conn_data *conn_data, char *user) {
     curl_easy_setopt(handle, CURLOPT_USERPWD, external_lookup_userpwd);
     curl_easy_setopt(handle, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 
-    snprintf(url, sizeof(url), external_lookup_url, mysqltype, user);
+    snprintf(url, sizeof(url), external_lookup_url, dbtype, user);
     curl_easy_setopt(handle, CURLOPT_URL, url);
     curl_easy_setopt(handle, CURLOPT_USERAGENT, "rum");
 

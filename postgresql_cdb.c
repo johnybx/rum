@@ -4,6 +4,7 @@ char *postgresql_cdb_file = NULL;
 struct cdb postgresql_cdb;
 int postgresql_cdb_fd;
 static uv_timer_t *timer;
+extern char *dbtype;
 
 void
 stop_postgresql_cdb_file ()
@@ -30,6 +31,8 @@ init_postgresql_cdb_file (char *type)
     } else {
         cdb_init (&postgresql_cdb, postgresql_cdb_fd);
     }
+
+    dbtype = "postgresql";
 }
 
 

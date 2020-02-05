@@ -21,7 +21,7 @@ char *ssl_ciphers = SSL_CIPHERS;
 char *ssl_min_proto = NULL;
 char *ssl_max_proto = NULL;
 int verbose = 0;
-char *mysqltype = NULL;
+char *dbtype = NULL;
 int geoip = 0;
 bool external_lookup = false;
 char *external_lookup_url = NULL;
@@ -112,7 +112,7 @@ main (int ac, char *av[])
         {"logfile", required_argument, 0, 'l'},
         {"mysql-cdb", required_argument, 0, 'M'},
         {"postgresql-cdb", required_argument, 0, 'P'},
-        {"mysqltype", required_argument, 0, 't'},
+        {"dbtype", required_argument, 0, 't'},
         {"failover-r", required_argument, 0, 'R'},
         {"failover", required_argument, 0, 'f'},
         {"read-timeout", required_argument, 0, 0},
@@ -207,7 +207,7 @@ main (int ac, char *av[])
             loglogins = 1;
             break;
         case 't':
-            mysqltype = optarg;
+            dbtype = optarg;
             break;
         case 'f':
             mode = MODE_FAILOVER;
@@ -275,11 +275,11 @@ main (int ac, char *av[])
      * so it is race condition free (safe to free and init global cdb variable)
      */
     if (mysql_cdb_file) {
-        init_mysql_cdb_file (mysqltype);
+        init_mysql_cdb_file ();
     }
 
     if (postgresql_cdb_file) {
-        init_postgresql_cdb_file (mysqltype);
+        init_postgresql_cdb_file ();
     }
 
     if (curl_global_init(CURL_GLOBAL_ALL)) {
@@ -554,7 +554,7 @@ logmsg (const char *fmt, ...)
     va_end (args);
 
     if (mysql_cdb_file) {
-        logstring = mysqltype;
+        logstring = dbtype;
     } else if (postgresql_cdb_file) {
         logstring = "postgresql";
     } else {
