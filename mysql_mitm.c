@@ -319,9 +319,20 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
         }
     } else {
         if (conn_data->mitm->data && conn_data->mitm->data_len) {
-            get_data_from_curl (conn_data->mitm->data_len, conn_data->mitm->data,
-                                    user, user_len, &mysql_server,
-                                    &conn_data->mitm->password, NULL, NULL);
+            struct json_object *jobj = json_tokener_parse(conn_data->mitm->data);
+
+            if (jobj) {
+                int data_len=json_object_get_string_len(jobj);
+                const char *data = json_object_get_string(jobj);
+
+                get_data_from_curl (data_len, data,
+                                        user, user_len, &mysql_server,
+                                        &conn_data->mitm->password, NULL, NULL);
+
+                json_object_put(jobj);
+            } else {
+                logmsg("cannot decode json from str (%s)", conn_data->mitm->data);
+            }
         } else {
             get_data_from_cdb (user, user_len, &mysql_server,
                                &conn_data->mitm->password, NULL, NULL);
