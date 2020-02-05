@@ -451,7 +451,9 @@ main (int ac, char *av[])
         free (postgresql_cdb_file);
     }
 
-    close_mmdb();
+    if (geoip) {
+        close_mmdb();
+    }
 
     struct destination *dst;
     dst = first_destination;
