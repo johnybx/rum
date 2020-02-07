@@ -15,7 +15,7 @@ stop_postgresql_cdb_file ()
 }
 
 void
-init_postgresql_cdb_file (char *type)
+init_postgresql_cdb_file ()
 {
     timer = malloc (sizeof (uv_timer_t));
     uv_timer_init (uv_default_loop(), timer);
@@ -32,7 +32,9 @@ init_postgresql_cdb_file (char *type)
         cdb_init (&postgresql_cdb, postgresql_cdb_fd);
     }
 
-    dbtype = "postgresql";
+    if (!dbtype) {
+        dbtype = "postgresql";
+    }
 }
 
 

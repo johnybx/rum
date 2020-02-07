@@ -1,3 +1,11 @@
+rum (6.4-bionic) bionic; urgency=medium
+
+  * postgresql support with external lookup api
+  * fix crash at exit when not using geoip
+  * fix json decode curl result when not using geoip
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Fri, 07 Feb 2020 11:14:55 +0100
+
 rum (6.3-bionic) bionic; urgency=medium
 
   * detect when rum get local rackunit ip from api and drop connection to avoid loop

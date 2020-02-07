@@ -4,6 +4,8 @@ extern struct destination *first_destination;
 extern int loglogins;
 extern int server_ssl;
 extern int geoip;
+extern bool external_lookup;
+extern char *external_lookup_url;
 
 int
 pg_handle_init_packet_from_client (struct conn_data *conn_data,
@@ -73,9 +75,11 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         return 1;
     }
 
-    conn_data->mitm->client_auth_packet_len = nread;
-    conn_data->mitm->client_auth_packet = malloc (nread);
-    memcpy (conn_data->mitm->client_auth_packet, uv_buf->base, nread);
+    if (!conn_data->mitm->client_auth_packet) {
+        conn_data->mitm->client_auth_packet_len = nread;
+        conn_data->mitm->client_auth_packet = malloc (nread);
+        memcpy (conn_data->mitm->client_auth_packet, uv_buf->base, nread);
+    }
 
     userptr =
         conn_data->mitm->client_auth_packet + 2 * sizeof (int) + sizeof ("user");
@@ -93,11 +97,31 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
              conn_data->mitm->client_auth_packet + 2 * sizeof (int) +
              sizeof ("user"), user_len);
     user[user_len] = '\0';
+    if (!conn_data->mitm->user) {
+        conn_data->mitm->user = strdup(user);
+    }
 
     if (geoip && conn_data->stream->type == UV_TCP) {
         ip_mask_pair_t* allowed_ips = NULL;
         geo_country_t* allowed_countries = NULL;
-        get_data_from_cdb_postgresql (user, user_len, &pg_server, &allowed_ips, &allowed_countries);
+
+        if (conn_data->mitm->data && conn_data->mitm->data_len) {
+            /* decode json and use that data as cdb value */
+            struct json_object *jobj = json_tokener_parse(conn_data->mitm->data);
+            if (jobj) {
+                int data_len=json_object_get_string_len(jobj);
+                const char *data = json_object_get_string(jobj);
+
+                get_data_from_curl_postgresql (data_len, data,
+                                               user, user_len, &pg_server, &allowed_ips, &allowed_countries);
+
+                json_object_put(jobj);
+            } else {
+                logmsg("cannot decode json from str (%s)", conn_data->mitm->data);
+            }
+        } else {
+            get_data_from_cdb_postgresql (user, user_len, &pg_server, &allowed_ips, &allowed_countries);
+        }
 
         struct sockaddr_in peer;
         int peer_len = sizeof(peer);
@@ -130,12 +154,44 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
             }
         }
     } else {
-        get_data_from_cdb_postgresql (user, user_len, &pg_server, NULL, NULL);
+        if (conn_data->mitm->data && conn_data->mitm->data_len) {
+            /* decode json and use that data as cdb value */
+            struct json_object *jobj = json_tokener_parse(conn_data->mitm->data);
+            if (jobj) {
+                int data_len=json_object_get_string_len(jobj);
+                const char *data = json_object_get_string(jobj);
+
+                get_data_from_curl_postgresql (data_len, data,
+                                               user, user_len, &pg_server, NULL, NULL);
+
+                json_object_put(jobj);
+            } else {
+                logmsg("cannot decode json from str (%s)", conn_data->mitm->data);
+            }
+        } else {
+            get_data_from_cdb_postgresql (user, user_len, &pg_server, NULL, NULL);
+        }
     }
 
     if (pg_server != NULL) {
+        if (conn_data->mitm->data && conn_data->mitm->data_len && is_this_rackunit(pg_server)) {
+            logmsg ("ext api set postgresql_server this rackunit (%s) for user %s from %s%s", pg_server, user, get_ipport (conn_data), get_sslinfo (conn_data));
+
+            send_postgres_error(conn_data, "MAccess denied, loop detected");
+
+            if (pg_server)
+                free (pg_server);
+
+            return 1;
+        }
         destination = add_destination(pg_server);
     } else {
+        if (external_lookup && external_lookup_url && !conn_data->mitm->curl_handle) {
+            uv_read_stop(conn_data->stream);
+            make_curl_request(conn_data, user);
+            return 1;
+        }
+
         /* if user is not found in cdb, sent client error msg & close connection  */
         logmsg ("user %s not found in cdb from %s%s", user, get_ipport (conn_data), get_sslinfo (conn_data));
 

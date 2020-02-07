@@ -201,6 +201,11 @@ on_shutdown (uv_shutdown_t * shutdown, int status)
         }
     }
 
+    if (conn_data->pending) {
+        free_pending_ll(conn_data->pending);
+        conn_data->pending = NULL;
+    }
+
     if (conn_data->remote && conn_data->remote->stream) {
         conn_data->remote->remote = NULL;
         uv_read_stop ((uv_stream_t *) conn_data->remote->stream);

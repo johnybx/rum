@@ -9,6 +9,8 @@ static struct hsearch_data htab;
 extern cfg_bool_t external_lookup_cache;
 extern long int external_lookup_cache_flush;
 static struct ll_hsearch_data *mainll = NULL;
+extern char *mysql_cdb_file;
+extern char *postgresql_cdb_file;
 
 typedef struct curl_context_s {
   uv_poll_t poll_handle;
@@ -36,6 +38,24 @@ get_data_from_curl (int external_data_len, const char *external_data, char *user
 
     return;
 }
+
+void
+get_data_from_curl_postgresql (int external_data_len, const char *external_data, char *user, int user_len, char **postgresql_server,
+                   ip_mask_pair_t** allowed_ips, geo_country_t** allowed_countries)
+{
+
+    *postgresql_server = strdup (external_data + strlen(external_data) + 1);
+
+    unsigned int read = strlen(*postgresql_server) + 2;
+    int remaining = external_data_len - read;
+
+    if (remaining >= 1 && allowed_ips && allowed_countries) {
+        get_ip_access_from_cdb_tail(&external_data[read], remaining, allowed_ips, allowed_countries);
+    }
+
+    return;
+}
+
 
 static void check_multi_info(struct conn_data *conn_data)
 {
@@ -66,7 +86,11 @@ static void check_multi_info(struct conn_data *conn_data)
         if (external_lookup_cache == cfg_true) {
             add_data_to_cache(conn_data->mitm->user, conn_data->mitm->data);
         }
-        handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
+        if (mysql_cdb_file) {
+            handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
+        } else if (postgresql_cdb_file) {
+            pg_handle_init_packet_from_client (conn_data, &uv_buf, uv_buf.len);
+        }
       } else {
         if (code == 404) {
             add_data_to_cache(conn_data->mitm->user, NULL);
@@ -77,7 +101,11 @@ static void check_multi_info(struct conn_data *conn_data)
         /* if user is not found in external source, sent client error msg & close connection  */
         logmsg ("user %s not found in cdb/external from %s%s", conn_data->mitm->user, get_ipport (conn_data), get_sslinfo (conn_data));
         /* we reply access denied  */
-        send_mysql_error(conn_data, "Access denied, unknown user '%s'", conn_data->mitm->user);
+        if (mysql_cdb_file) {
+            send_mysql_error(conn_data, "Access denied, unknown user '%s'", conn_data->mitm->user);
+        } else if (postgresql_cdb_file) {
+            send_postgres_error(conn_data, "MUser \"%s\" not found", conn_data->mitm->user);
+        }
       }
 
       curl_multi_remove_handle(conn_data->mitm->curl_handle, easy_handle);
@@ -357,7 +385,12 @@ void make_curl_request(struct conn_data *conn_data, char *user) {
             uv_buf.base = conn_data->mitm->client_auth_packet;
             uv_buf.len = conn_data->mitm->client_auth_packet_len;
     
-            handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
+            if (mysql_cdb_file) {
+                handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
+            } else if (postgresql_cdb_file) {
+                pg_handle_init_packet_from_client (conn_data, &uv_buf, uv_buf.len);
+            }
+
             return;
         }
     }

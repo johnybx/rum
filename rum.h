@@ -338,6 +338,10 @@ struct ll_hsearch_data
 void get_data_from_curl (int external_data_len, const char *external_data, char *user, int user_len, char **mysql_server,
                    char **mysql_password, ip_mask_pair_t** allowed_ips,
                    geo_country_t** allowed_countries);
+void get_data_from_curl_postgresql (int external_data_len, const char *external_data, char *user, int user_len,
+                   char **mysql_server, ip_mask_pair_t** allowed_ips,
+                   geo_country_t** allowed_countries);
+
 void make_curl_request(struct conn_data *conn_data, char *user);
 void init_curl_cache();
 void free_curl_cache();
