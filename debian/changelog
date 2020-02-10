@@ -1,3 +1,9 @@
+rum (6.5-bionic) bionic; urgency=medium
+
+  * fix leak in send_postgres_error & reject usernames with invalid chars
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Mon, 10 Feb 2020 10:03:51 +0100
+
 rum (6.4-bionic) bionic; urgency=medium
 
   * postgresql support with external lookup api
