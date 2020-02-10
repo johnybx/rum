@@ -97,6 +97,20 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
              conn_data->mitm->client_auth_packet + 2 * sizeof (int) +
              sizeof ("user"), user_len);
     user[user_len] = '\0';
+
+    if (user_len == 0) {
+        logmsg ("%s: empty username from %s", __FUNCTION__, get_ipport(conn_data));
+        send_postgres_error(conn_data, "MInvalid username");
+        return 1;
+    }
+
+
+    if (!username_has_allowed_chars(user, user_len)) {
+        logmsg ("%s: invalid chars in username from %s", __FUNCTION__, get_ipport(conn_data));
+        send_postgres_error(conn_data, "MInvalid username");
+        return 1;
+    }
+
     if (!conn_data->mitm->user) {
         conn_data->mitm->user = strdup(user);
     }
@@ -195,7 +209,7 @@ pg_handle_init_packet_from_client (struct conn_data *conn_data,
         /* if user is not found in cdb, sent client error msg & close connection  */
         logmsg ("user %s not found in cdb from %s%s", user, get_ipport (conn_data), get_sslinfo (conn_data));
 
-        send_postgres_error(conn_data, "MUser \"%s\" not found", user);
+        send_postgres_error(conn_data, "MUser not found");
 
         if (pg_server)
             free (pg_server);
@@ -305,10 +319,11 @@ void send_postgres_error(struct conn_data* conn_data, const char* fmt, ...)
             free (newbuf->base);
             free (newbuf);
             free (req);
-            uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-            if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-                free (shutdown);
-            }
         }
+    }
+
+    uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+    if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+        free (shutdown);
     }
 }

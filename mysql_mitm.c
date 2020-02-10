@@ -256,6 +256,19 @@ handle_auth_packet_from_client (struct conn_data *conn_data,
              conn_data->mitm->client_auth_packet + MYSQL_PACKET_HEADER_SIZE +
              MYSQL_AUTH_PACKET_USER_POS, user_len);
     user[user_len] = '\0';
+
+    if (user_len == 0) {
+        logmsg ("%s: empty username from %s", __FUNCTION__, get_ipport(conn_data));
+        send_mysql_error(conn_data, "Invalid username");
+        return 1;
+    }
+
+    if (!username_has_allowed_chars(user, user_len)) {
+        logmsg ("%s: invalid chars in username from %s", __FUNCTION__, get_ipport(conn_data));
+        send_mysql_error(conn_data, "Invalid username");
+        return 1;
+    }
+
     if (!conn_data->mitm->user) {
         conn_data->mitm->user = strdup(user);
     }
@@ -738,11 +751,6 @@ void send_mysql_error(struct conn_data* conn_data, const char* fmt, ...)
         //set_packet_seq(buf, 2);
         SSL_write(conn_data->ssl, buf, buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1);
         flush_ssl(conn_data);
-
-        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-            free (shutdown);
-        }
     } else {
         uv_write_t *req = (uv_write_t *) malloc (sizeof (uv_write_t));
         uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
@@ -753,10 +761,10 @@ void send_mysql_error(struct conn_data* conn_data, const char* fmt, ...)
         newbuf->len = buflen + sizeof (ERR_LOGIN_PACKET_PREFIX) - 1;
         req->data = newbuf;
         uv_write (req, conn_data->stream, newbuf, 1, on_write);
+    }
 
-        uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
-        if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
-            free (shutdown);
-        }
+    uv_shutdown_t *shutdown = malloc (sizeof (uv_shutdown_t));
+    if (uv_shutdown (shutdown, conn_data->stream, on_shutdown)) {
+        free (shutdown);
     }
 }

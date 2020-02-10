@@ -39,6 +39,8 @@
 #include <confuse.h>
 #include <search.h>
 
+#define ALLOWED_USERNAME_CHARS "_-.0123456789aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ"
+
 #define SSL_BUFSIZE 16384
 
 #define STR(x) #x
@@ -219,6 +221,7 @@ void randomize_destinations (void);
 void shuffle (struct destination **array, size_t n);
 void free_pending_ll(struct pending *pending);
 bool is_this_rackunit(const char *mysql_server);
+bool username_has_allowed_chars(char *user, int user_len);
 
 /* socket.c */
 void on_shutdown (uv_shutdown_t * shutdown, int status);

@@ -780,3 +780,15 @@ void free_pending_ll(struct pending *pending) {
         free(prev);
     }
 }
+
+bool username_has_allowed_chars(char *user, int user_len) {
+    int i;
+
+    for (i = 0; i < user_len; i++) {
+        if (!strchr(ALLOWED_USERNAME_CHARS, user[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
