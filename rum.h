@@ -80,6 +80,9 @@
 #define MODE_FAILOVER_R 3       /* -R tcp:...,tcp:... */
 
 #define MMDB_RELOAD_TIME 3600
+
+enum dbtype {DBTYPE_MYSQL, DBTYPE_POSTGRESQL, DBTYPE_NONE};
+
 struct listener
 {
     uv_stream_t *stream;        /* listening stream */
@@ -222,6 +225,7 @@ void shuffle (struct destination **array, size_t n);
 void free_pending_ll(struct pending *pending);
 bool is_this_rackunit(const char *mysql_server);
 bool username_has_allowed_chars(char *user, int user_len);
+void init_dbtype();
 
 /* socket.c */
 void on_shutdown (uv_shutdown_t * shutdown, int status);

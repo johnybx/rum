@@ -21,7 +21,8 @@ char *ssl_ciphers = SSL_CIPHERS;
 char *ssl_min_proto = NULL;
 char *ssl_max_proto = NULL;
 int verbose = 0;
-char *dbtype = NULL;
+enum dbtype dbtype = DBTYPE_NONE;
+char *dbtypestr = NULL;
 int geoip = 0;
 bool external_lookup = false;
 char *external_lookup_url = NULL;
@@ -30,6 +31,9 @@ int external_lookup_timeout = 5000;
 cfg_bool_t external_lookup_cache = cfg_false;
 long int external_lookup_cache_flush = 3;
 struct this_rackunit_ips *this_rackunit_ips = NULL;
+
+extern char *cache_mysql_init_packet;
+extern int cache_mysql_init_packet_len;
 
 void
 signal_handler (uv_signal_t * handle, int signum)
@@ -207,7 +211,7 @@ main (int ac, char *av[])
             loglogins = 1;
             break;
         case 't':
-            dbtype = optarg;
+            dbtypestr = optarg;
             break;
         case 'f':
             mode = MODE_FAILOVER;
@@ -274,6 +278,10 @@ main (int ac, char *av[])
      * reopen_cdb is called from main event loop, it is not called directly by signal,
      * so it is race condition free (safe to free and init global cdb variable)
      */
+    if (dbtypestr) {
+        init_dbtype();
+    }
+
     if (mysql_cdb_file) {
         init_mysql_cdb_file ();
     }
@@ -418,9 +426,10 @@ main (int ac, char *av[])
         }
 
     }
-
-    if (!first_destination && !mysql_cdb_file && !postgresql_cdb_file) {
-        usage ();
+    if ((dbtype == DBTYPE_NONE && !first_destination) ||
+        (dbtype == DBTYPE_MYSQL && (!mysql_cdb_file && !external_lookup)) ||
+        (dbtype == DBTYPE_POSTGRESQL && (!postgresql_cdb_file && !external_lookup))) {
+            usage ();
     }
 
     if (daemonize) {
@@ -500,6 +509,7 @@ usage ()
          "-t - mysql type (mysql50, mysql51, mariadb55), when used do not use -d"
          "\n\t"
          "-b - goto background"
+         "\n\t"
          "-L - log logins to syslog (when using -M or -P)"
          "\n\t"
          "--connect-timeout 6 - connect timeout when server is not available (default 6)"
@@ -520,7 +530,7 @@ usage ()
          "\n\t"
          "-g /path/to/GeoLite2-Country.mmdb - enable ip/geoip protection (with -M|-P)"
          "\n\t"
-         "--ext https://domain.com/.../%%s - additional lookup via https for data if not found in cdb (-M|-P), %%s is replaced by login from client"
+         "-E - additional lookup via https for data if not found in cdb (-M|-P), %%s is replaced by login from client"
          "\n\t"
          "--ext-timeout timeoutms - curl timeout for ext request"
          "\n\n"
@@ -555,10 +565,8 @@ logmsg (const char *fmt, ...)
     vsnprintf (tmpmsg, sizeof (tmpmsg), fmt, args);
     va_end (args);
 
-    if (mysql_cdb_file) {
-        logstring = dbtype;
-    } else if (postgresql_cdb_file) {
-        logstring = "postgresql";
+    if (dbtype != DBTYPE_NONE) {
+        logstring = dbtypestr;
     } else {
         logstring = "rum";
     }
@@ -791,4 +799,73 @@ bool username_has_allowed_chars(char *user, int user_len) {
     }
 
     return true;
+}
+
+void init_dbtype() {
+    /* if we specify type of mysqlserver via -t mysql50|mysql51|mariadb55 we use hardcoded init packet */
+    if (!strcmp (dbtypestr, "mysql50")) {
+        cache_mysql_init_packet =
+            malloc (sizeof (MYSQL50_INIT_PACKET) - 1);
+        memcpy (cache_mysql_init_packet, MYSQL50_INIT_PACKET,
+            sizeof (MYSQL50_INIT_PACKET) - 1);
+        cache_mysql_init_packet_len = sizeof (MYSQL50_INIT_PACKET) - 1;
+        dbtype = DBTYPE_MYSQL;
+    } else if (!strcmp (dbtypestr, "mysql51")) {
+        cache_mysql_init_packet =
+            malloc (sizeof (MYSQL51_INIT_PACKET) - 1);
+        memcpy (cache_mysql_init_packet, MYSQL51_INIT_PACKET,
+            sizeof (MYSQL51_INIT_PACKET) - 1);
+        cache_mysql_init_packet_len = sizeof (MYSQL51_INIT_PACKET) - 1;
+        dbtype = DBTYPE_MYSQL;
+    } else if (!strcmp (dbtypestr, "mariadb55")) {
+        cache_mysql_init_packet =
+            malloc (sizeof (MARIADB55_INIT_PACKET) - 1);
+        memcpy (cache_mysql_init_packet, MARIADB55_INIT_PACKET,
+                sizeof (MARIADB55_INIT_PACKET) - 1);
+        cache_mysql_init_packet_len = sizeof (MARIADB55_INIT_PACKET) - 1;
+        dbtype = DBTYPE_MYSQL;
+    } else if (!strcmp (dbtypestr, "mariadb10.1") || !strcmp (dbtypestr, "mariadb101")) {
+        if (strstr(dbtypestr, ".")) {
+            dbtypestr= "mariadb101";
+        }
+        cache_mysql_init_packet =
+            malloc (sizeof (MARIADB10_1_INIT_PACKET) - 1);
+        memcpy (cache_mysql_init_packet, MARIADB10_1_INIT_PACKET,
+                sizeof (MARIADB10_1_INIT_PACKET) - 1);
+        cache_mysql_init_packet_len = sizeof (MARIADB10_1_INIT_PACKET) - 1;
+        dbtype = DBTYPE_MYSQL;
+    } else if (!strcmp (dbtypestr, "mariadb10.3") || !strcmp (dbtypestr, "mariadb103")) {
+        if (strstr(dbtypestr, ".")) {
+            dbtypestr = "mariadb103";
+        }
+        cache_mysql_init_packet =
+            malloc (sizeof (MARIADB10_3_INIT_PACKET) - 1);
+        memcpy (cache_mysql_init_packet, MARIADB10_3_INIT_PACKET,
+                sizeof (MARIADB10_3_INIT_PACKET) - 1);
+        cache_mysql_init_packet_len = sizeof (MARIADB10_3_INIT_PACKET) - 1;
+        dbtype = DBTYPE_MYSQL;
+    } else if (!strcmp (dbtypestr, "mysql57")) {
+        cache_mysql_init_packet =
+            malloc (sizeof (MYSQL57_INIT_PACKET) - 1);
+        memcpy (cache_mysql_init_packet, MYSQL57_INIT_PACKET,
+                sizeof (MYSQL57_INIT_PACKET) - 1);
+        cache_mysql_init_packet_len = sizeof (MYSQL57_INIT_PACKET) - 1;
+        dbtype = DBTYPE_MYSQL;
+    } else if (!strcmp (dbtypestr, "mysql80")) {
+        cache_mysql_init_packet =
+            malloc (sizeof (MYSQL80_INIT_PACKET) - 1);
+        memcpy (cache_mysql_init_packet, MYSQL80_INIT_PACKET,
+                sizeof (MYSQL80_INIT_PACKET) - 1);
+        cache_mysql_init_packet_len = sizeof (MYSQL80_INIT_PACKET) - 1;
+        dbtype = DBTYPE_MYSQL;
+    } else if (!strcmp (dbtypestr, "postgresql")) {
+        dbtype = DBTYPE_POSTGRESQL;
+    } else {
+        fprintf (stderr, "unknown db type: %s", dbtypestr);
+        exit (-1);
+    }
+
+    if (dbtype == DBTYPE_MYSQL && server_ssl) {
+        enable_server_side_ssl_flag();
+    }
 }

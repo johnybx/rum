@@ -5,10 +5,8 @@ struct cdb cdb;
 int cdb_fd;
 static uv_timer_t *timer = NULL;
 
-extern char *cache_mysql_init_packet;
-extern int cache_mysql_init_packet_len;
-extern int server_ssl;
-extern char *dbtype;
+extern enum dbtype dbtype;
+extern char *dbtypestr;
 
 void
 stop_mysql_cdb_file ()
@@ -29,67 +27,9 @@ init_mysql_cdb_file ()
         exit (1);
     }
 
-    if (dbtype == NULL) {
-        fprintf (stderr, "you must use -t type with -M\n");
+    if (dbtype != DBTYPE_MYSQL || dbtypestr == NULL) {
+        fprintf (stderr, "you must use -t dbtype with -M\n");
         exit (1);
-    } else {
-        /* if we specify type of mysqlserver via -i mysql50|mysql51|mariadb55 we use hardcoded init packet */
-        if (!strcmp (dbtype, "mysql50")) {
-            cache_mysql_init_packet =
-                malloc (sizeof (MYSQL50_INIT_PACKET) - 1);
-            memcpy (cache_mysql_init_packet, MYSQL50_INIT_PACKET,
-                    sizeof (MYSQL50_INIT_PACKET) - 1);
-            cache_mysql_init_packet_len = sizeof (MYSQL50_INIT_PACKET) - 1;
-        } else if (!strcmp (dbtype, "mysql51")) {
-            cache_mysql_init_packet =
-                malloc (sizeof (MYSQL51_INIT_PACKET) - 1);
-            memcpy (cache_mysql_init_packet, MYSQL51_INIT_PACKET,
-                    sizeof (MYSQL51_INIT_PACKET) - 1);
-            cache_mysql_init_packet_len = sizeof (MYSQL51_INIT_PACKET) - 1;
-        } else if (!strcmp (dbtype, "mariadb55")) {
-            cache_mysql_init_packet =
-                malloc (sizeof (MARIADB55_INIT_PACKET) - 1);
-            memcpy (cache_mysql_init_packet, MARIADB55_INIT_PACKET,
-                    sizeof (MARIADB55_INIT_PACKET) - 1);
-            cache_mysql_init_packet_len = sizeof (MARIADB55_INIT_PACKET) - 1;
-        } else if (!strcmp (dbtype, "mariadb10.1") || !strcmp (dbtype, "mariadb101")) {
-            if (strstr(dbtype, ".")) {
-                dbtype = "mariadb101";
-            }
-            cache_mysql_init_packet =
-                malloc (sizeof (MARIADB10_1_INIT_PACKET) - 1);
-            memcpy (cache_mysql_init_packet, MARIADB10_1_INIT_PACKET,
-                    sizeof (MARIADB10_1_INIT_PACKET) - 1);
-            cache_mysql_init_packet_len = sizeof (MARIADB10_1_INIT_PACKET) - 1;
-        } else if (!strcmp (dbtype, "mariadb10.3") || !strcmp (dbtype, "mariadb103")) {
-            if (strstr(dbtype, ".")) {
-                dbtype = "mariadb103";
-            }
-            cache_mysql_init_packet =
-                malloc (sizeof (MARIADB10_3_INIT_PACKET) - 1);
-            memcpy (cache_mysql_init_packet, MARIADB10_3_INIT_PACKET,
-                    sizeof (MARIADB10_3_INIT_PACKET) - 1);
-            cache_mysql_init_packet_len = sizeof (MARIADB10_3_INIT_PACKET) - 1;
-        } else if (!strcmp (dbtype, "mysql57")) {
-            cache_mysql_init_packet =
-                malloc (sizeof (MYSQL57_INIT_PACKET) - 1);
-            memcpy (cache_mysql_init_packet, MYSQL57_INIT_PACKET,
-                    sizeof (MYSQL57_INIT_PACKET) - 1);
-            cache_mysql_init_packet_len = sizeof (MYSQL57_INIT_PACKET) - 1;
-        } else if (!strcmp (dbtype, "mysql80")) {
-            cache_mysql_init_packet =
-                malloc (sizeof (MYSQL80_INIT_PACKET) - 1);
-            memcpy (cache_mysql_init_packet, MYSQL80_INIT_PACKET,
-                    sizeof (MYSQL80_INIT_PACKET) - 1);
-            cache_mysql_init_packet_len = sizeof (MYSQL80_INIT_PACKET) - 1;
-        } else {
-            fprintf (stderr, "unknown mysql type: %s", dbtype);
-            exit (-1);
-        }
-    }
-
-    if (server_ssl) {
-        enable_server_side_ssl_flag();
     }
 
     if ((cdb_fd = open (mysql_cdb_file, O_RDONLY)) == -1) {

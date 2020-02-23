@@ -4,7 +4,8 @@ char *postgresql_cdb_file = NULL;
 struct cdb postgresql_cdb;
 int postgresql_cdb_fd;
 static uv_timer_t *timer;
-extern char *dbtype;
+extern enum dbtype dbtype;
+extern char *dbtypestr;
 
 void
 stop_postgresql_cdb_file ()
@@ -25,6 +26,9 @@ init_postgresql_cdb_file ()
         exit (1);
     }
 
+    if (dbtype == DBTYPE_NONE) {
+        dbtype = DBTYPE_POSTGRESQL;
+    }
 
     if ((postgresql_cdb_fd = open (postgresql_cdb_file, O_RDONLY)) == -1) {
         return;
@@ -32,8 +36,9 @@ init_postgresql_cdb_file ()
         cdb_init (&postgresql_cdb, postgresql_cdb_fd);
     }
 
-    if (!dbtype) {
-        dbtype = "postgresql";
+    if (!dbtypestr) {
+        dbtypestr = "postgresql";
+        dbtype = DBTYPE_POSTGRESQL;
     }
 }
 

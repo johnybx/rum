@@ -4,13 +4,12 @@ extern bool external_lookup;
 extern char *external_lookup_url;
 extern char *external_lookup_userpwd;
 extern int external_lookup_timeout;
-extern char *dbtype;
 static struct hsearch_data htab;
 extern cfg_bool_t external_lookup_cache;
 extern long int external_lookup_cache_flush;
 static struct ll_hsearch_data *mainll = NULL;
-extern char *mysql_cdb_file;
-extern char *postgresql_cdb_file;
+extern enum dbtype dbtype;
+extern char *dbtypestr;
 
 typedef struct curl_context_s {
   uv_poll_t poll_handle;
@@ -86,9 +85,9 @@ static void check_multi_info(struct conn_data *conn_data)
         if (external_lookup_cache == cfg_true) {
             add_data_to_cache(conn_data->mitm->user, conn_data->mitm->data);
         }
-        if (mysql_cdb_file) {
+        if (dbtype == DBTYPE_MYSQL) {
             handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
-        } else if (postgresql_cdb_file) {
+        } else if (dbtype == DBTYPE_POSTGRESQL) {
             pg_handle_init_packet_from_client (conn_data, &uv_buf, uv_buf.len);
         }
       } else {
@@ -101,9 +100,9 @@ static void check_multi_info(struct conn_data *conn_data)
         /* if user is not found in external source, sent client error msg & close connection  */
         logmsg ("user %s not found in cdb/external from %s%s", conn_data->mitm->user, get_ipport (conn_data), get_sslinfo (conn_data));
         /* we reply access denied  */
-        if (mysql_cdb_file) {
+        if (dbtype == DBTYPE_MYSQL) {
             send_mysql_error(conn_data, "Access denied, unknown user '%s'", conn_data->mitm->user);
-        } else if (postgresql_cdb_file) {
+        } else if (dbtype == DBTYPE_POSTGRESQL) {
             send_postgres_error(conn_data, "MUser \"%s\" not found", conn_data->mitm->user);
         }
       }
@@ -385,9 +384,9 @@ void make_curl_request(struct conn_data *conn_data, char *user) {
             uv_buf.base = conn_data->mitm->client_auth_packet;
             uv_buf.len = conn_data->mitm->client_auth_packet_len;
     
-            if (mysql_cdb_file) {
+            if (dbtype == DBTYPE_MYSQL) {
                 handle_auth_packet_from_client (conn_data, &uv_buf, uv_buf.len);
-            } else if (postgresql_cdb_file) {
+            } else if (dbtype == DBTYPE_POSTGRESQL) {
                 pg_handle_init_packet_from_client (conn_data, &uv_buf, uv_buf.len);
             }
 
@@ -418,7 +417,7 @@ void make_curl_request(struct conn_data *conn_data, char *user) {
     curl_easy_setopt(handle, CURLOPT_USERPWD, external_lookup_userpwd);
     curl_easy_setopt(handle, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 
-    snprintf(url, sizeof(url), external_lookup_url, dbtype, user);
+    snprintf(url, sizeof(url), external_lookup_url, dbtypestr, user);
     curl_easy_setopt(handle, CURLOPT_URL, url);
     curl_easy_setopt(handle, CURLOPT_USERAGENT, "rum");
 

@@ -1,3 +1,9 @@
+rum (6.6-bionic) bionic; urgency=medium
+
+  * allow use mysql/postgres redirection without cdb but with api
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Sun, 23 Feb 2020 12:37:30 +0100
+
 rum (6.5-bionic) bionic; urgency=medium
 
   * fix leak in send_postgres_error & reject usernames with invalid chars

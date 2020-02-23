@@ -1,8 +1,7 @@
 #include "rum.h"
 
 extern struct destination *first_destination;
-extern char *mysql_cdb_file;
-extern char *postgresql_cdb_file;
+extern enum dbtype dbtype;
 
 extern char *cache_mysql_init_packet;
 extern int cache_mysql_init_packet_len;
@@ -191,9 +190,9 @@ on_outgoing_connection (uv_connect_t * connect, int status)
 
     /* on successfull connect */
     conn_data->connected = 1;
-    if (mysql_cdb_file) {
+    if (dbtype == DBTYPE_MYSQL) {
         r = uv_read_start (stream, alloc_cb, mysql_on_read_disable_read_timeout);
-    } else if (postgresql_cdb_file) {
+    } else if (dbtype == DBTYPE_POSTGRESQL) {
         /* if IP is public send ssl request */
         if (!is_private_address(conn_data)) {
             r = uv_read_start (stream, alloc_cb, postgresql_on_read_disable_read_timeout);
@@ -328,7 +327,7 @@ on_incoming_connection (uv_stream_t * server, int status)
     conn_data_client->remote = NULL;
 
     if (listener->type == LISTENER_DEFAULT) {
-        if (!mysql_cdb_file && !postgresql_cdb_file) {
+        if (dbtype == DBTYPE_NONE) {
             /* no cdb files, classic redirector */
             conn_data_target =
                 create_server_connection (conn_data_client, destination,
@@ -342,7 +341,7 @@ on_incoming_connection (uv_stream_t * server, int status)
             if (listener->sockettype == SOCKET_SSL) {
                 enable_server_ssl(conn_data_client);
             }
-        } else if (mysql_cdb_file) {
+        } else if (dbtype == DBTYPE_MYSQL) {
             /* if mysql_cdb is enabled, use different callback functions */
             conn_data_client->mitm = init_mitm ();
 
@@ -390,7 +389,7 @@ on_incoming_connection (uv_stream_t * server, int status)
             }
 
             return;
-        } else if (postgresql_cdb_file) {
+        } else if (dbtype == DBTYPE_POSTGRESQL) {
             /* if postgresql_cdb is enabled, use different callback functions */
             conn_data_client->mitm = init_mitm ();
 
