@@ -558,6 +558,57 @@ handle_auth_with_server (struct conn_data *conn_data, const uv_buf_t * uv_buf,
                                    conn_data->mitm->hash_stage1);
     }
 
+    /*
+    logmsg("CLIENT_CONNECT_ATTRS %d %d %d",
+      check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_CONNECT_ATTRS),
+      check_server_capability(uv_buf->base, nread, CLIENT_CONNECT_ATTRS),
+      check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_CONNECT_ATTRS));
+    logmsg("CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA %d %d %d",
+      check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA),
+      check_server_capability(uv_buf->base, nread, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA),
+      check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA));
+    logmsg("CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS %d %d %d",
+      check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS),
+      check_server_capability(uv_buf->base, nread, CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS),
+      check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS));
+    logmsg("CLIENT_SESSION_TRACKING %d %d %d",
+      check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_SESSION_TRACKING),
+      check_server_capability(uv_buf->base, nread, CLIENT_SESSION_TRACKING),
+      check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_SESSION_TRACKING));
+    logmsg("CLIENT_DEPRECATE_EOF %d %d %d",
+      check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_DEPRECATE_EOF),
+      check_server_capability(uv_buf->base, nread, CLIENT_DEPRECATE_EOF),
+      check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_DEPRECATE_EOF));
+    */
+
+    if (check_server_capability(uv_buf->base, nread, CLIENT_CONNECT_ATTRS) &&
+         !check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_CONNECT_ATTRS) &&
+         check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_CONNECT_ATTRS)) {
+
+        disable_client_capability(conn_data->mitm->client_auth_packet, CLIENT_CONNECT_ATTRS);
+    }
+
+    if (check_server_capability(uv_buf->base, nread, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) &&
+         !check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) &&
+         check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA)) {
+
+        disable_client_capability(conn_data->mitm->client_auth_packet, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA);
+    }
+
+    if (check_server_capability(uv_buf->base, nread, CLIENT_SESSION_TRACKING) &&
+         !check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_SESSION_TRACKING) &&
+         check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_SESSION_TRACKING)) {
+
+        disable_client_capability(conn_data->mitm->client_auth_packet, CLIENT_SESSION_TRACKING);
+    }
+
+    if (check_server_capability(uv_buf->base, nread, CLIENT_DEPRECATE_EOF) &&
+         !check_server_capability(cache_mysql_init_packet, cache_mysql_init_packet_len, CLIENT_DEPRECATE_EOF) &&
+         check_client_capability(conn_data->mitm->client_auth_packet, CLIENT_DEPRECATE_EOF)) {
+
+        disable_client_capability(conn_data->mitm->client_auth_packet, CLIENT_DEPRECATE_EOF);
+    }
+
     uv_buf_t *newbuf = malloc (sizeof (uv_buf_t));
     newbuf->base = malloc (conn_data->mitm->client_auth_packet_len);
 
@@ -768,3 +819,63 @@ void send_mysql_error(struct conn_data* conn_data, const char* fmt, ...)
         free (shutdown);
     }
 }
+
+int
+check_server_capability(char *packet, size_t len, uint32_t capability)
+{
+    uint32_t server_capabilities;
+    char *ptr;
+    char *ptr2;
+
+    if (len < MYSQL_PACKET_HEADER_SIZE + 1) {
+        return 0;
+    }
+
+    // TODO buffer overflow, i am lazy to fix it, its handling first packet from trusted servers
+    for (ptr = packet + MYSQL_PACKET_HEADER_SIZE + 1; *ptr!='\0'; ptr ++);
+    ptr += 1 + 4;
+    for (ptr = ptr + 1; *ptr!='\0'; ptr ++);
+    ptr += 1;
+    memcpy (&server_capabilities, (void *)ptr, sizeof(uint16_t));
+    ptr += 2; // capability flags (lower 2 bytes)
+    ptr += 1; // charset
+    ptr += 2; // status flag
+    /* capability flags (upper 2 bytes) */
+    ptr2 = (char *)&server_capabilities;
+    ptr2 +=2;
+    memcpy (ptr2, (void *)ptr, sizeof(uint16_t));
+    if ((server_capabilities & capability) == capability) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+int
+check_client_capability(char *packet, uint32_t capability)
+{
+    uint32_t client_capabilities;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE;
+    memcpy (&client_capabilities, (void *)ptr, sizeof(uint32_t));
+    if ((client_capabilities & capability) == capability) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+void
+disable_client_capability(char *packet, uint32_t capability)
+{
+    uint32_t client_capabilities;
+    char *ptr;
+    ptr =  packet + MYSQL_PACKET_HEADER_SIZE;
+    memcpy (&client_capabilities, (void *)ptr, sizeof(uint32_t));
+
+    if ((client_capabilities & capability) == capability) {
+        client_capabilities = client_capabilities & ~capability;
+        memcpy ((void *) ptr, &client_capabilities, sizeof(uint32_t));
+    }
+}
+

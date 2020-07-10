@@ -1,3 +1,9 @@
+rum (6.7-bionic) bionic; urgency=medium
+
+  * fix mixing mariadb55/mariadb103
+
+ -- Pavel Stano <pavel.stano@websupport.sk>  Fri, 10 Jul 2020 10:38:16 +0200
+
 rum (6.6-bionic) bionic; urgency=medium
 
   * allow use mysql/postgres redirection without cdb but with api

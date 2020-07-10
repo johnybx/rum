@@ -83,6 +83,15 @@
 
 enum dbtype {DBTYPE_MYSQL, DBTYPE_POSTGRESQL, DBTYPE_NONE};
 
+/* some copy pasted client/server capability constants from mariadb source */
+#define CLIENT_SSL                2048     /* Switch to SSL after handshake */
+#define CLIENT_PLUGIN_AUTH       (1UL << 19)
+#define CLIENT_CONNECT_ATTRS     (1UL << 20)
+#define CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA (1ULL << 21)
+#define CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS (1UL << 22)
+#define CLIENT_SESSION_TRACKING  (1UL << 23)
+#define CLIENT_DEPRECATE_EOF (1ULL << 24)
+
 struct listener
 {
     uv_stream_t *stream;        /* listening stream */
@@ -304,6 +313,10 @@ void set_packet_seq(char *packet, uint8_t n);
 void decrement_packet_seq(char *packet);
 void increment_packet_seq(char *packet);
 void print_packet_seq(char *packet);
+
+int check_server_capability(char *packet, size_t len, uint32_t capability);
+int check_client_capability(char *packet, uint32_t capability);
+void disable_client_capability(char *packet, uint32_t capability);
 
 void send_mysql_error(struct conn_data* conn_data, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 void send_postgres_error(struct conn_data* conn_data, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
