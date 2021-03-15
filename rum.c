@@ -844,6 +844,16 @@ void init_dbtype() {
                 sizeof (MARIADB10_3_INIT_PACKET) - 1);
         cache_mysql_init_packet_len = sizeof (MARIADB10_3_INIT_PACKET) - 1;
         dbtype = DBTYPE_MYSQL;
+    } else if (!strcmp (dbtypestr, "mariadb10.5") || !strcmp (dbtypestr, "mariadb105")) {
+        if (strstr(dbtypestr, ".")) {
+            dbtypestr = "mariadb105";
+        }
+        cache_mysql_init_packet =
+            malloc (sizeof (MARIADB10_5_INIT_PACKET) - 1);
+        memcpy (cache_mysql_init_packet, MARIADB10_5_INIT_PACKET,
+                sizeof (MARIADB10_5_INIT_PACKET) - 1);
+        cache_mysql_init_packet_len = sizeof (MARIADB10_5_INIT_PACKET) - 1;
+        dbtype = DBTYPE_MYSQL;
     } else if (!strcmp (dbtypestr, "mysql57")) {
         cache_mysql_init_packet =
             malloc (sizeof (MYSQL57_INIT_PACKET) - 1);
