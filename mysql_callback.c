@@ -23,6 +23,63 @@ mysql_on_read_disable_read_timeout (uv_stream_t * stream, ssize_t nread, const u
     mysql_on_read(stream, nread, buf);
 }
 
+bool
+mysql_is_whole_packet(const char* data, size_t len)
+{
+    if (len >= MYSQL_PACKET_HEADER_SIZE) {
+        union {
+            const char *data;
+            struct {
+                unsigned char payload_length[3];
+                unsigned char sequence_id;
+            } __attribute__((packed)) * mysql_header;
+        } header;
+
+        header.data = data;
+        size_t payload_len = header.mysql_header->payload_length[0]
+                             | (header.mysql_header->payload_length[1] << 8u)
+                             | (header.mysql_header->payload_length[2] << 16u);
+
+        if (len >= MYSQL_PACKET_HEADER_SIZE + payload_len) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool
+mysql_build_packet(struct mitm* mitm, const uv_buf_t* incoming, uv_buf_t* outbuf)
+{
+    if (mitm->input_buffer.data == NULL) {
+        if (mysql_is_whole_packet(incoming->base, incoming->len)) {
+            outbuf->base = incoming->base;
+            outbuf->len = incoming->len;
+            return true;
+        }
+
+        mitm->input_buffer.data = malloc(1024);
+        mitm->input_buffer.len = 1024;
+        mitm->input_buffer.pos = 0;
+    }
+
+    if (incoming->len > mitm->input_buffer.len - mitm->input_buffer.pos) {
+        mitm->input_buffer.data = realloc(mitm->input_buffer.data, mitm->input_buffer.len + incoming->len);
+        mitm->input_buffer.len += incoming->len;
+    }
+
+    memcpy(&mitm->input_buffer.data[mitm->input_buffer.pos], incoming->base, incoming->len);
+    mitm->input_buffer.pos += incoming->len;
+
+    if (mysql_is_whole_packet(mitm->input_buffer.data, mitm->input_buffer.pos)) {
+        outbuf->base = mitm->input_buffer.data;
+        outbuf->len = mitm->input_buffer.pos;
+        return true;
+    }
+
+    return false;
+}
+
 void
 mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
 {
@@ -114,7 +171,10 @@ mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
                 /* data from mysql client */
                 if (conn_data->mitm->handshake == 1) {
                     /* first data from client */
-                    handle_auth_packet_from_client (conn_data, buf, nread);
+                    uv_buf_t packet;
+                    if (mysql_build_packet(conn_data->mitm, buf, &packet)) {
+                        handle_auth_packet_from_client (conn_data, &packet, nread);
+                    }
                 }
             }
         } else if (nread < 0) {

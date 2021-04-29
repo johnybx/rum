@@ -209,6 +209,11 @@ struct mitm
     char *data;
     int data_len;
 
+    struct {
+      char* data;
+      size_t len;
+      size_t pos;
+    } input_buffer;
 };
 
 typedef struct __attribute__((packed)) {
