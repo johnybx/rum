@@ -38,6 +38,10 @@ init_mitm ()
     mitm->data = NULL;
     mitm->data_len = 0;
 
+    mitm->input_buffer.data = NULL;
+    mitm->input_buffer.len = 0;
+    mitm->input_buffer.pos = 0;
+
     return mitm;
 }
 
@@ -78,6 +82,11 @@ free_mitm (struct mitm *mitm)
     if (mitm->user) {
         free (mitm->user);
         mitm->user = NULL;
+    }
+
+    if (mitm->input_buffer.data) {
+        free (mitm->input_buffer.data);
+        mitm->input_buffer.data = NULL;
     }
 
     free (mitm);
