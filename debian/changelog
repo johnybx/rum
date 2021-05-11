@@ -1,3 +1,9 @@
+rum (6.8.3-bionic) bionic; urgency=medium
+
+  * further fix for auth packet handling
+
+ -- Frantisek Drojak <frantisek.drojak@websupport.sk>  Mon, 15 Mar 2021 20:49:16 +0200
+
 rum (6.8.2-bionic) bionic; urgency=medium
 
   * fix handling fragmented auth packets , add support for mariadb10.5
