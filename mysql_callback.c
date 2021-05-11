@@ -173,7 +173,7 @@ mysql_on_read (uv_stream_t * stream, ssize_t nread, const uv_buf_t * constbuf)
                     /* first data from client */
                     uv_buf_t packet;
                     if (mysql_build_packet(conn_data->mitm, buf, &packet)) {
-                        handle_auth_packet_from_client (conn_data, &packet, nread);
+                        handle_auth_packet_from_client (conn_data, &packet, packet.len);
                     }
                 }
             }
